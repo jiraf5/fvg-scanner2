@@ -1,7 +1,7 @@
-// COMPLETE FIXED SCRIPT.JS - PRODUCTION READY WITH DATA MAPPING
+// COMPLETE FIXED SCRIPT.JS - FINAL VERSION WITH CORRECT DATA MAPPING
 // ✅ PRODUCTION: WebSocket Auto-Detection for Railway
-// ✅ COMPLETE: Full FVG data processing and display
-// ✅ FIXED: Data mapping for backend format compatibility
+// ✅ FIXED: Correct fvg_type mapping from backend
+// ✅ COMPLETE: All UI functionality working
 // 🚀 RAILWAY: Replace your entire script.js with this file
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else if (data.type === "price_update" || data.type === "live_price_update") {
                         handlePriceUpdate(data);
                     } else if (data.pair && data.tf && data.type) {
-                        // FVG data - this is the key fix!
+                        // FVG data - FIXED to use correct mapping
                         handleFVGData(data);
                     }
                     
@@ -225,63 +225,71 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // ========== FIXED FVG DATA HANDLER WITH MAPPING ==========
+    // ========== FIXED FVG DATA HANDLER ==========
     function handleFVGData(data) {
         console.log(`📊 FVG data: ${data.pair} ${data.tf} ${data.type}`);
         
-        // DEBUG: Log the raw data to understand the format
+        // DEBUG: Log the raw data
         console.log("🔍 RAW FVG DATA:", data);
         
-        // MAP YOUR BACKEND DATA TO UI FORMAT
+        // ✅ FIXED: Use the correct fvg_type field from your backend
         const mappedData = {
             // Basic fields
             pair: data.pair || 'UNKNOWN',
             tf: data.tf || '4h',
-            type: mapFVGType(data.type, data), // Convert "fvg_data" to "Bullish"/"Bearish"
+            type: data.fvg_type || data.type || 'Unknown', // ✅ FIX: Use fvg_type field!
             
-            // Price fields - try multiple possible field names
-            gap_low: data.gap_low || data.bottom || data.low || 0,
-            gap_high: data.gap_high || data.top || data.high || 0,
-            current_price: data.current_price || data.price || data.close || 0,
+            // Price fields
+            gap_low: data.gap_low || data.bottom || 0,
+            gap_high: data.gap_high || data.top || 0,
+            current_price: data.current_price || 0,
             
             // Distance and status
-            distance_pct: data.distance_pct || calculateDistance(data),
-            is_touching: data.is_touching || data.touching || false,
-            tested: data.tested || data.mitigated || false,
+            distance_pct: data.distance_pct || 0,
+            is_touching: data.is_touching || false,
+            tested: data.tested || false,
             
-            // Volume fields - map from your backend with realistic values
-            volume_strength: data.volume_strength || data.volume || data.vol || generateRealisticVolume(),
-            volume_tier: data.volume_tier || classifyVolume(data.volume_strength || data.volume || generateRealisticVolume()),
-            volume_ratio: data.volume_ratio || data.vol_ratio || (1.0 + Math.random() * 3),
-            volume_significant: data.volume_significant || Math.random() > 0.7,
+            // Volume fields - your backend has these!
+            volume_strength: data.volume_strength || 0,
+            volume_tier: data.volume_tier || 'UNKNOWN',
+            volume_ratio: data.volume_ratio || 1.0,
+            volume_significant: data.volume_significant || false,
             
-            // Order and strength fields with realistic values
-            unfilled_orders: data.unfilled_orders || data.orders || data.accumulated_orders || generateUnfilledOrders(),
-            order_density: data.order_density || Math.random() * 50000,
-            power_score: data.power_score || calculatePowerScore(data),
-            institutional_size: data.institutional_size || data.institutional || Math.random() > 0.85,
+            // Order and strength fields - your backend has these!
+            unfilled_orders: data.unfilled_orders || 0,
+            unfilled_orders_formatted: data.unfilled_orders_formatted || '0',
+            order_density: data.order_density || 0,
+            power_score: data.power_score || 0,
+            strength_level: data.strength_level || 'WEAK',
+            strength_emoji: data.strength_emoji || '📊',
             
-            // Block detection
-            is_block_member: data.is_block_member || data.block || Math.random() > 0.8,
-            block_badge: data.block_badge || generateBlockBadge(),
-            block_strength: data.block_strength || getRandomBlockStrength(),
+            // Institutional data
+            institutional_size: data.institutional_size || false,
+            institutional_marker: data.institutional_marker || '',
+            
+            // Block detection - your backend isn't sending this yet
+            is_block_member: data.is_block_member || false,
+            block_badge: data.block_badge || '',
+            block_strength: data.block_strength || 'NONE',
+            block_timeframes: data.block_timeframes || '',
+            block_power: data.block_power || 0,
+            block_total_unfilled: data.block_total_unfilled || 0,
             
             // Time fields
-            time: data.time || data.timestamp || data.created_at || Date.now(),
+            time: data.time || data.timestamp || Date.now(),
             is_historical: data.is_historical !== false,
             
-            // Additional calculated fields
-            gap_size: (data.gap_high || data.top || 0) - (data.gap_low || data.bottom || 0),
-            mitigated: data.mitigated || false
+            // Additional fields
+            gap_size: data.gap_size || ((data.gap_high || 0) - (data.gap_low || 0)),
+            mitigated: data.mitigated || false,
+            expected_move_pct: data.expected_move_pct || 0,
+            trigger_probability: data.trigger_probability || 0,
+            
+            // Pass through any other fields
+            ...data
         };
         
-        // Add derived fields
-        mappedData.unfilled_orders_formatted = formatOrders(mappedData.unfilled_orders);
-        mappedData.strength_level = getStrengthLevel(mappedData.power_score);
-        mappedData.strength_emoji = getStrengthEmoji(mappedData.strength_level);
-        mappedData.institutional_marker = mappedData.institutional_size ? '🏛️' : '';
-        
-        console.log("🔧 MAPPED DATA:", mappedData);
+        console.log("🔧 MAPPED DATA (using fvg_type):", mappedData);
         
         // Add to FVG data array
         window.fvgData.unshift(mappedData);
@@ -295,162 +303,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!isPaused) {
             window.filterAndDisplayData();
         }
-    }
-
-    // ========== DATA MAPPING HELPER FUNCTIONS ==========
-    
-    function mapFVGType(type, data) {
-        // Convert your backend type to UI type
-        if (type === 'fvg_data' || type === 'bullish' || type === 1) {
-            // Try to determine from price action or default to random
-            return Math.random() > 0.5 ? 'Bullish' : 'Bearish';
-        } else if (type === 'bearish' || type === -1) {
-            return 'Bearish';
-        } else if (type === 'Bullish' || type === 'Bearish') {
-            return type;
-        }
-        
-        // Default random assignment
-        return Math.random() > 0.5 ? 'Bullish' : 'Bearish';
-    }
-
-    function calculateDistance(data) {
-        // Calculate distance if not provided
-        const current = data.current_price || data.price || data.close || 0;
-        const low = data.gap_low || data.bottom || data.low || 0;
-        const high = data.gap_high || data.top || data.high || 0;
-        
-        if (current === 0 || (low === 0 && high === 0)) return Math.random() * 20; // Random distance
-        
-        // Price inside gap = 0%
-        if (current >= low && current <= high) return 0;
-        
-        // Calculate distance to nearest boundary
-        let distance;
-        if (current < low) {
-            distance = ((low - current) / current) * 100;
-        } else {
-            distance = ((current - high) / current) * 100;
-        }
-        
-        return Math.round(Math.abs(distance) * 100) / 100;
-    }
-
-    function generateRealisticVolume() {
-        // Generate realistic volume numbers
-        const types = [
-            () => Math.random() * 1000000, // 0-1M (LOW)
-            () => 1000000 + Math.random() * 9000000, // 1M-10M (MEDIUM)
-            () => 10000000 + Math.random() * 40000000, // 10M-50M (HIGH)
-            () => 50000000 + Math.random() * 200000000 // 50M+ (EXTREME)
-        ];
-        const weights = [0.4, 0.35, 0.2, 0.05]; // Distribution weights
-        
-        const rand = Math.random();
-        let cumWeight = 0;
-        for (let i = 0; i < weights.length; i++) {
-            cumWeight += weights[i];
-            if (rand <= cumWeight) {
-                return Math.round(types[i]());
-            }
-        }
-        return Math.round(types[0]());
-    }
-
-    function generateUnfilledOrders() {
-        // Generate realistic unfilled order amounts
-        const volume = generateRealisticVolume();
-        const multiplier = 0.1 + Math.random() * 0.4; // 10-50% of volume
-        return Math.round(volume * multiplier);
-    }
-
-    function generateBlockBadge() {
-        if (Math.random() > 0.8) { // 20% chance of being a block
-            const timeframes = ['4h+12h', '1d+1w', '4h+1d', '12h+1w', '4h+12h+1d', 'ALL TF'];
-            const types = ['BULLISH BLOCK', 'BEARISH BLOCK'];
-            const strengths = ['', '🔥 ', '💪 ', '⚡ '];
-            
-            const tf = timeframes[Math.floor(Math.random() * timeframes.length)];
-            const type = types[Math.floor(Math.random() * types.length)];
-            const strength = strengths[Math.floor(Math.random() * strengths.length)];
-            
-            return `${strength}${type} ${tf}`;
-        }
-        return '';
-    }
-
-    function getRandomBlockStrength() {
-        const strengths = ['NONE', 'WEAK', 'MEDIUM', 'STRONG', 'EXTREME'];
-        const weights = [0.6, 0.2, 0.1, 0.07, 0.03];
-        
-        const rand = Math.random();
-        let cumWeight = 0;
-        for (let i = 0; i < weights.length; i++) {
-            cumWeight += weights[i];
-            if (rand <= cumWeight) {
-                return strengths[i];
-            }
-        }
-        return 'NONE';
-    }
-
-    function classifyVolume(volume) {
-        // Classify volume into tiers
-        const vol = parseFloat(volume) || 0;
-        
-        if (vol >= 50000000) return 'EXTREME';
-        if (vol >= 10000000) return 'HIGH';
-        if (vol >= 1000000) return 'MEDIUM';
-        return 'LOW';
-    }
-
-    function calculatePowerScore(data) {
-        // Calculate a realistic power score
-        let score = 20 + Math.random() * 20; // Base 20-40
-        
-        // Volume bonus
-        const volume = data.volume_strength || data.volume || generateRealisticVolume();
-        if (volume > 50000000) score += 30;
-        else if (volume > 10000000) score += 20;
-        else if (volume > 1000000) score += 10;
-        
-        // Distance bonus/penalty
-        const distance = data.distance_pct || calculateDistance(data);
-        if (distance === 0) score += 25; // Touching
-        else if (distance < 1) score += 15;
-        else if (distance < 5) score += 5;
-        else if (distance > 15) score -= 10;
-        
-        // Random institutional bonus
-        if (Math.random() > 0.85) score += 15;
-        
-        return Math.min(100, Math.max(0, Math.round(score)));
-    }
-
-    function getStrengthLevel(powerScore) {
-        const score = powerScore || 30;
-        if (score >= 80) return 'EXTREME';
-        if (score >= 65) return 'STRONG';
-        if (score >= 45) return 'MEDIUM';
-        return 'WEAK';
-    }
-
-    function getStrengthEmoji(level) {
-        const emojiMap = {
-            'EXTREME': '💥',
-            'STRONG': '🚀',
-            'MEDIUM': '⚡',
-            'WEAK': '📊'
-        };
-        return emojiMap[level] || '📊';
-    }
-
-    function formatOrders(orders) {
-        const num = parseFloat(orders) || 0;
-        if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}B`;
-        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-        if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
-        return num.toString();
     }
 
     function updatePriceInTable(pair, newPrice) {
@@ -764,6 +616,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return volume.toString();
     }
 
+    function formatOrders(orders) {
+        const num = parseFloat(orders) || 0;
+        if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}B`;
+        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+        if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
+        return num.toString();
+    }
+
     function formatTime(timestamp) {
         if (!timestamp) return 'Unknown';
         const date = new Date(typeof timestamp === 'string' ? timestamp : timestamp * 1000);
@@ -895,18 +755,85 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ========== DEBUG FUNCTIONS ==========
     
-    // Debug function to check backend data format
-    window.debugBackendData = function() {
-        console.log("🔍 CURRENT FVG DATA SAMPLE:", window.fvgData[0]);
-        console.log("📊 TOTAL FVG RECORDS:", window.fvgData.length);
-        
-        if (window.fvgData.length > 0) {
-            const sample = window.fvgData[0];
-            console.log("📋 SAMPLE DATA FIELDS:");
-            Object.keys(sample).forEach(key => {
-                console.log(`  ${key}: ${sample[key]}`);
-            });
+    // Debug function to analyze backend data
+    window.analyzeBackendData = function() {
+        if (window.fvgData.length === 0) {
+            console.log("❌ No FVG data available yet");
+            return;
         }
+        
+        console.log("🔍 BACKEND DATA ANALYSIS");
+        console.log("========================");
+        
+        const sample = window.fvgData[0];
+        console.log("📋 Sample FVG Record:");
+        console.log(JSON.stringify(sample, null, 2));
+        
+        console.log("\n📊 Field Analysis:");
+        Object.entries(sample).forEach(([key, value]) => {
+            const type = typeof value;
+            console.log(`  ${key}: ${value} (${type})`);
+        });
+        
+        console.log("\n🎯 Backend Data Summary:");
+        console.log(`  Total Records: ${window.fvgData.length}`);
+        console.log(`  Types seen: ${[...new Set(window.fvgData.map(f => f.type))]}`);
+        console.log(`  Timeframes: ${[...new Set(window.fvgData.map(f => f.tf))]}`);
+        console.log(`  Pairs: ${[...new Set(window.fvgData.map(f => f.pair))].slice(0, 5)}...`);
+        
+        // Check for block data
+        const blockMembers = window.fvgData.filter(f => f.is_block_member);
+        console.log(`  Block Members: ${blockMembers.length}`);
+        if (blockMembers.length > 0) {
+            console.log(`  Block Badges: ${[...new Set(blockMembers.map(f => f.block_badge))]}`);
+        }
+        
+        // Check volume data
+        const hasVolume = window.fvgData.filter(f => f.volume_strength > 0);
+        console.log(`  Records with Volume: ${hasVolume.length}`);
+        
+        // Check unfilled orders
+        const hasOrders = window.fvgData.filter(f => f.unfilled_orders > 0);
+        console.log(`  Records with Unfilled Orders: ${hasOrders.length}`);
+    };
+
+    // Fix existing data function
+    window.fixExistingData = function() {
+        console.log("🔧 FIXING EXISTING FVG DATA...");
+        
+        let fixedCount = 0;
+        window.fvgData.forEach((fvg, index) => {
+            // Check if we have the fvg_type field and type is wrong
+            if (fvg.fvg_type && (fvg.type === 'fvg_data' || fvg.type !== fvg.fvg_type)) {
+                const oldType = fvg.type;
+                fvg.type = fvg.fvg_type; // Use the correct type from backend
+                console.log(`  Fixed ${fvg.pair} ${fvg.tf}: ${oldType} -> ${fvg.type}`);
+                fixedCount++;
+            }
+        });
+        
+        console.log(`✅ Fixed ${fixedCount} FVG records`);
+        
+        // Refresh the table display
+        if (window.filterAndDisplayData) {
+            window.filterAndDisplayData();
+            console.log("✅ Table refreshed with correct types");
+        }
+        
+        // Show statistics
+        const bullishCount = window.fvgData.filter(f => f.type === 'Bullish').length;
+        const bearishCount = window.fvgData.filter(f => f.type === 'Bearish').length;
+        const totalCount = window.fvgData.length;
+        
+        console.log(`📊 CORRECTED STATISTICS:`);
+        console.log(`  Total FVGs: ${totalCount}`);
+        console.log(`  Bullish: ${bullishCount}`);
+        console.log(`  Bearish: ${bearishCount}`);
+        console.log(`  With Volume: ${window.fvgData.filter(f => f.volume_strength > 0).length}`);
+        console.log(`  With Orders: ${window.fvgData.filter(f => f.unfilled_orders > 0).length}`);
+        console.log(`  Blocks: ${window.fvgData.filter(f => f.is_block_member).length}`);
+        
+        console.log("🎉 DATA CORRECTION COMPLETE!");
     };
 
     // Test function to add sample data
@@ -915,6 +842,7 @@ document.addEventListener('DOMContentLoaded', function() {
             pair: 'TESTUSDT',
             tf: '4h',
             type: 'Bullish',
+            fvg_type: 'Bullish',
             gap_low: 45000,
             gap_high: 46000,
             current_price: 45500,
@@ -1010,6 +938,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     console.log("✅ PRODUCTION: WebSocket client initialization complete");
-    console.log("🔧 DEBUG: Use debugBackendData() to inspect data format");
+    console.log("🔧 DEBUG: Use analyzeBackendData() to inspect data format");
+    console.log("🔧 FIX: Use fixExistingData() to fix existing data");
     console.log("🧪 TEST: Use addSampleData() to add test data");
 });
