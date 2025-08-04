@@ -1,7 +1,7 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse
 import os
 import asyncio
 import json
@@ -44,20 +44,21 @@ fvg_data_buffer = []
 async def read_root():
     """Serve the main FVG Scanner interface"""
     try:
-        # Try to find and serve the main HTML file
+        # Try to find and serve the main HTML file - FIXED PATH DETECTION
         html_candidates = [
-            "static/index.html",
-            "index.html", 
-            "static/fvg-scanner.html",
-            "fvg-scanner.html"
+            "static/index.html",  # This should work with your uploaded file
+            "index.html",
+            "static/fvg-scanner.html"
         ]
         
         for html_file in html_candidates:
             if os.path.exists(html_file):
-                logger.info(f"✅ Serving HTML from: {html_file}")
+                logger.info(f"✅ Found and serving HTML from: {html_file}")
+                
                 with open(html_file, "r", encoding="utf-8") as f:
                     content = f.read()
-                    # Auto-fix WebSocket URL in HTML if needed
+                    
+                    # Auto-fix WebSocket URLs in the HTML for Railway
                     content = content.replace(
                         'ws://localhost:8000/ws',
                         'wss://web-production-6b86c.up.railway.app/ws'
@@ -66,21 +67,89 @@ async def read_root():
                         'ws://127.0.0.1:8000/ws', 
                         'wss://web-production-6b86c.up.railway.app/ws'
                     )
+                    
+                    # Ensure script.js path is correct
+                    content = content.replace(
+                        'src="/script.js"',
+                        'src="/static/script.js"'
+                    )
+                    
+                    logger.info(f"📄 Serving your beautiful FVG Scanner interface!")
                     return HTMLResponse(content=content)
         
-        # If no HTML file found, serve embedded interface
-        logger.info("📄 No HTML file found, serving embedded interface")
-        return HTMLResponse(content=get_embedded_interface())
+        # If no HTML file found, show error with file listing
+        logger.warning("❌ No HTML file found!")
+        
+        # List all files in current directory for debugging
+        current_files = []
+        try:
+            for root, dirs, files in os.walk("."):
+                for file in files:
+                    if file.endswith(('.html', '.js', '.css')):
+                        current_files.append(os.path.join(root, file))
+        except Exception as e:
+            logger.error(f"Error listing files: {e}")
+        
+        return HTMLResponse(content=f"""
+        <html>
+        <head>
+            <title>FVG Scanner - File Not Found</title>
+            <style>
+                body {{ 
+                    font-family: Arial; 
+                    margin: 40px; 
+                    background: #1a1a1a; 
+                    color: white; 
+                    line-height: 1.6;
+                }}
+                .error {{ color: #ff6b6b; }}
+                .success {{ color: #4CAF50; }}
+                .info {{ color: #4fc3f7; }}
+                pre {{ background: #2a2a2a; padding: 15px; border-radius: 5px; }}
+            </style>
+        </head>
+        <body>
+            <h1>🔥 FVG Scanner Backend - File Detection Issue</h1>
+            
+            <div class="success">
+                <h3>✅ Backend Status: RUNNING</h3>
+                <p><strong>Version:</strong> 2.1.0</p>
+                <p><strong>Environment:</strong> Production</p>
+                <p><strong>WebSocket:</strong> wss://web-production-6b86c.up.railway.app/ws</p>
+            </div>
+            
+            <div class="error">
+                <h3>❌ HTML File Not Found</h3>
+                <p>Looking for: static/index.html</p>
+            </div>
+            
+            <div class="info">
+                <h3>📁 Files Found in Repository:</h3>
+                <pre>{chr(10).join(current_files) if current_files else 'No HTML/JS/CSS files found'}</pre>
+            </div>
+            
+            <div class="info">
+                <h3>🔧 Quick Fix:</h3>
+                <p>1. Ensure static/index.html exists in your GitHub repository</p>
+                <p>2. Redeploy on Railway</p>
+                <p>3. Your beautiful FVG Scanner interface will load</p>
+            </div>
+            
+            <div class="success">
+                <h3>🌐 Test Endpoints:</h3>
+                <p><a href="/health" style="color: #4CAF50;">Health Check</a></p>
+                <p><a href="/status" style="color: #4CAF50;">Service Status</a></p>
+                <p><a href="/docs" style="color: #4CAF50;">API Documentation</a></p>
+            </div>
+        </body>
+        </html>
+        """)
         
     except Exception as e:
         logger.error(f"❌ Error serving root: {e}")
         return HTMLResponse(content=f"""
         <html>
-        <head>
-            <title>FVG Scanner - Error</title>
-            <style>body {{ font-family: Arial; margin: 40px; background: #1a1a1a; color: white; }}</style>
-        </head>
-        <body>
+        <body style="font-family: Arial; margin: 40px; background: #1a1a1a; color: white;">
             <h1>🔥 FVG Scanner Backend</h1>
             <p>✅ <strong>Status:</strong> Running</p>
             <p>❌ <strong>Error:</strong> {str(e)}</p>
@@ -91,6 +160,25 @@ async def read_root():
         </html>
         """)
 
+# Serve script.js file specifically
+@app.get("/script.js")
+async def serve_script():
+    """Serve the script.js file"""
+    try:
+        script_paths = ["static/script.js", "script.js"]
+        
+        for script_path in script_paths:
+            if os.path.exists(script_path):
+                logger.info(f"✅ Serving script.js from: {script_path}")
+                return FileResponse(script_path, media_type="application/javascript")
+        
+        logger.warning("❌ script.js not found")
+        return HTMLResponse(content="console.log('❌ script.js not found');", media_type="application/javascript")
+        
+    except Exception as e:
+        logger.error(f"❌ Error serving script.js: {e}")
+        return HTMLResponse(content=f"console.log('❌ script.js error: {str(e)}');", media_type="application/javascript")
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for Railway monitoring"""
@@ -100,7 +188,6 @@ async def health_check():
         "version": "2.1.0",
         "environment": "production",
         "timestamp": time.time(),
-        "uptime": time.time(),
         "connected_clients": len(connected_clients),
         "features": [
             "Real-time FVG detection",
@@ -121,29 +208,13 @@ async def get_status():
         "scanner": "active",
         "clients_connected": len(connected_clients),
         "data_buffer_size": len(fvg_data_buffer),
+        "static_files_exist": os.path.exists("static/index.html"),
         "urls": {
             "main": "https://web-production-6b86c.up.railway.app",
             "websocket": "wss://web-production-6b86c.up.railway.app/ws",
             "health": "https://web-production-6b86c.up.railway.app/health",
             "docs": "https://web-production-6b86c.up.railway.app/docs"
         }
-    }
-
-@app.get("/api/info")
-async def api_info():
-    """API information and endpoints"""
-    return {
-        "name": "FVG Scanner API",
-        "version": "2.1.0",
-        "description": "Real-time Fair Value Gap analysis for cryptocurrency trading",
-        "endpoints": {
-            "root": "/ - Main FVG Scanner interface",
-            "health": "/health - Health check",
-            "status": "/status - Service status",
-            "websocket": "/ws - Real-time WebSocket data",
-            "docs": "/docs - API documentation"
-        },
-        "websocket_url": "wss://web-production-6b86c.up.railway.app/ws"
     }
 
 @app.websocket("/ws")
@@ -311,294 +382,6 @@ async def send_sample_fvg_data(websocket: WebSocket):
         logger.info("📤 Sample data client disconnected")
     except Exception as e:
         logger.error(f"❌ Sample data error: {e}")
-
-def get_embedded_interface():
-    """Return embedded HTML interface when static files not found"""
-    return """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FVG Scanner - Production</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            color: white;
-            min-height: 100vh;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 15px;
-            padding: 30px;
-            backdrop-filter: blur(10px);
-        }
-        h1 {
-            text-align: center;
-            color: #4CAF50;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            margin-bottom: 30px;
-        }
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin: 20px 0;
-        }
-        .status-card {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 20px;
-            border-left: 4px solid #4CAF50;
-        }
-        .status-card h3 {
-            margin-top: 0;
-            color: #4CAF50;
-        }
-        .button {
-            background: linear-gradient(45deg, #4CAF50, #45a049);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 10px;
-            transition: all 0.3s ease;
-        }
-        .button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-        .output {
-            background: #000;
-            color: #0f0;
-            padding: 20px;
-            border-radius: 8px;
-            min-height: 300px;
-            font-family: 'Courier New', monospace;
-            margin: 20px 0;
-            overflow-y: auto;
-            max-height: 400px;
-            border: 1px solid #333;
-        }
-        .controls {
-            text-align: center;
-            margin: 20px 0;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin: 20px 0;
-        }
-        .stat-item {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            text-align: center;
-        }
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #4CAF50;
-        }
-        .stat-label {
-            font-size: 12px;
-            opacity: 0.8;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔥 FVG Scanner - Production Ready</h1>
-        
-        <div class="status-grid">
-            <div class="status-card">
-                <h3>✅ Backend Status</h3>
-                <p><strong>Status:</strong> Online</p>
-                <p><strong>Version:</strong> 2.1.0</p>
-                <p><strong>Environment:</strong> Production</p>
-            </div>
-            
-            <div class="status-card">
-                <h3>📊 Live Data Stream</h3>
-                <p><strong>WebSocket:</strong> Available</p>
-                <p><strong>URL:</strong> wss://web-production-6b86c.up.railway.app/ws</p>
-                <p><strong>Status:</strong> <span id="connectionStatus">Disconnected</span></p>
-            </div>
-            
-            <div class="status-card">
-                <h3>🎯 Features</h3>
-                <p>• Real-time FVG detection</p>
-                <p>• Multi-timeframe analysis</p>
-                <p>• Unfilled order tracking</p>
-                <p>• Block confluence detection</p>
-            </div>
-        </div>
-        
-        <div class="stats">
-            <div class="stat-item">
-                <div class="stat-value" id="totalFVGs">0</div>
-                <div class="stat-label">Total FVGs</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="bullishCount">0</div>
-                <div class="stat-label">Bullish</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="bearishCount">0</div>
-                <div class="stat-label">Bearish</div>
-            </div>
-            <div class="stat-item">
-                <div class="stat-value" id="connectedClients">0</div>
-                <div class="stat-label">Connected</div>
-            </div>
-        </div>
-        
-        <div class="controls">
-            <button class="button" onclick="connectWebSocket()">🔗 Connect to Live Data</button>
-            <button class="button" onclick="disconnectWebSocket()">⏹️ Disconnect</button>
-            <button class="button" onclick="clearOutput()">🧹 Clear Output</button>
-            <button class="button" onclick="testBackend()">🧪 Test Backend</button>
-        </div>
-        
-        <div id="output" class="output">
-            🚀 FVG Scanner Ready - Click "Connect to Live Data" to start monitoring...
-        </div>
-    </div>
-    
-    <script>
-        let ws = null;
-        let fvgCount = 0;
-        let bullishCount = 0;
-        let bearishCount = 0;
-        
-        function updateStatus(status) {
-            document.getElementById('connectionStatus').textContent = status;
-        }
-        
-        function updateStats() {
-            document.getElementById('totalFVGs').textContent = fvgCount;
-            document.getElementById('bullishCount').textContent = bullishCount;
-            document.getElementById('bearishCount').textContent = bearishCount;
-        }
-        
-        function addOutput(message) {
-            const output = document.getElementById('output');
-            const timestamp = new Date().toLocaleTimeString();
-            output.textContent += `[${timestamp}] ${message}\\n`;
-            output.scrollTop = output.scrollHeight;
-        }
-        
-        function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                addOutput('⚠️ Already connected');
-                return;
-            }
-            
-            addOutput('🔗 Connecting to FVG Scanner...');
-            updateStatus('Connecting...');
-            
-            ws = new WebSocket('wss://web-production-6b86c.up.railway.app/ws');
-            
-            ws.onopen = function() {
-                addOutput('✅ Connected to FVG Scanner!');
-                addOutput('📊 Monitoring real-time FVG data...');
-                updateStatus('Connected ✅');
-            };
-            
-            ws.onmessage = function(event) {
-                try {
-                    const data = JSON.parse(event.data);
-                    
-                    if (data.type === 'fvg_data') {
-                        fvgCount++;
-                        if (data.fvg_type === 'Bullish') bullishCount++;
-                        if (data.fvg_type === 'Bearish') bearishCount++;
-                        
-                        addOutput(`📊 ${data.pair} ${data.tf} ${data.fvg_type} - Orders: ${data.orders || 'N/A'} - Power: ${data.power || 'N/A'}`);
-                        updateStats();
-                        
-                    } else if (data.type === 'connection') {
-                        addOutput(`🎉 ${data.message}`);
-                        
-                    } else if (data.type === 'enhanced_fvg') {
-                        addOutput(`💥 ENHANCED: ${data.pair} ${data.timeframe} ${data.fvg_type} - Unfilled: ${data.unfilled_orders}`);
-                        
-                    } else if (data.type === 'stats') {
-                        addOutput(`📈 ${data.message}`);
-                        document.getElementById('connectedClients').textContent = data.clients_connected || 0;
-                        
-                    } else {
-                        addOutput(`📡 ${data.type || 'Data'}: ${JSON.stringify(data).substring(0, 80)}...`);
-                    }
-                    
-                } catch (e) {
-                    addOutput(`📝 Raw: ${event.data.substring(0, 100)}...`);
-                }
-            };
-            
-            ws.onerror = function(error) {
-                addOutput('❌ Connection error');
-                updateStatus('Error ❌');
-            };
-            
-            ws.onclose = function(event) {
-                addOutput(`🔌 Connection closed (Code: ${event.code})`);
-                updateStatus('Disconnected');
-            };
-        }
-        
-        function disconnectWebSocket() {
-            if (ws) {
-                ws.close();
-                addOutput('⏹️ Disconnected');
-                updateStatus('Disconnected');
-            }
-        }
-        
-        function clearOutput() {
-            document.getElementById('output').textContent = '';
-            fvgCount = 0;
-            bullishCount = 0;
-            bearishCount = 0;
-            updateStats();
-        }
-        
-        function testBackend() {
-            addOutput('🧪 Testing backend endpoints...');
-            
-            fetch('/health')
-                .then(r => r.json())
-                .then(d => {
-                    addOutput(`✅ Health check: ${d.status} v${d.version}`);
-                    addOutput(`📊 Features: ${d.features.length} available`);
-                })
-                .catch(e => addOutput(`❌ Health check failed: ${e.message}`));
-                
-            fetch('/status')
-                .then(r => r.json())
-                .then(d => {
-                    addOutput(`📈 Status: ${d.backend} - Scanner: ${d.scanner}`);
-                    addOutput(`🔗 Clients: ${d.clients_connected} - Buffer: ${d.data_buffer_size}`);
-                })
-                .catch(e => addOutput(`❌ Status check failed: ${e.message}`));
-        }
-        
-        // Auto-connect on page load
-        window.onload = function() {
-            setTimeout(connectWebSocket, 1000);
-        };
-    </script>
-</body>
-</html>
-    """
 
 # Railway startup
 if __name__ == "__main__":
