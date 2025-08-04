@@ -1,0 +1,35 @@
+# Production Requirements for FVG Scanner
+# ✅ Pinned versions for stability
+# ✅ Production-optimized packages
+# 🚀 Railway deployment ready
+
+# Core FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# WebSocket support
+websockets==12.0
+
+# HTTP client and async support
+aiohttp==3.9.1
+asyncio-mqtt==0.16.1
+
+# Cryptocurrency exchange API
+ccxt==4.1.24
+
+# Additional utilities
+requests==2.31.0
+python-dateutil==2.8.2
+
+# Production server enhancements (optional but recommended)
+gunicorn==21.2.0
+
+# Logging and monitoring
+structlog==23.2.0
+
+# Security enhancements
+cryptography==41.0.7
+
+# Performance monitoring (optional)
+psutil==5.9.6
