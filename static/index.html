@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FVG Scanner - Production | Real-Time Fair Value Gap Analysis</title>
+  
+  <!-- Production Meta Tags -->
+  <meta name="description" content="Real-time Fair Value Gap (FVG) scanner for cryptocurrency trading. Monitor 500+ pairs across multiple timeframes with block detection and accumulated order analysis.">
+  <meta name="keywords" content="FVG Scanner, Fair Value Gap, Cryptocurrency, Trading, Real-time, Block Detection, Technical Analysis">
+  <meta name="author" content="FVG Scanner">
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="FVG Scanner - Real-Time Fair Value Gap Analysis">
+  <meta property="og:description" content="Professional FVG scanner monitoring 500+ cryptocurrency pairs with real-time updates and block detection.">
+  <meta property="og:url" content="https://your-app-name.up.railway.app">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  
+  <!-- Production Styles -->
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: linear-gradient(45deg, #00ff88, #00d4ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .production-badge {
+      background: linear-gradient(45deg, #8b5cf6, #3b82f6);
+      color: white;
+      padding: 4px 12px;
+      border-radius: 15px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-left: 10px;
+      animation: productionGlow 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes productionGlow {
+      from { box-shadow: 0 0 5px rgba(139, 92, 246, 0.5); }
+      to { box-shadow: 0 0 15px rgba(139, 92, 246, 0.8); }
+    }
+
+    .status-indicator {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .status-connected {
+      background: #10b981;
+      animation: pulse 2s infinite;
+    }
+
+    .status-disconnected {
+      background: #ef4444;
+    }
+
+    .status-connecting {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .panel {
+      background: #374151;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .grid {
+      display: grid;
+      gap: 20px;
+    }
+
+    .grid-3 {
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    .grid-5 {
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      text-align: center;
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-number {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 0.875rem;
+      color: #9ca3af;
+    }
+
+    .green { color: #10b981; }
+    .blue { color: #3b82f6; }
+    .red { color: #ef4444; }
+    .yellow { color: #f59e0b; }
+    .purple { color: #8b5cf6; }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #4b5563;
+      border-radius: 5px;
+      background: #1f2937;
+      color: white;
+      font-size: 14px;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: #3b82f6;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-blue { background: #3b82f6; color: white; }
+    .btn-blue:hover { background: #2563eb; }
+    .btn-purple { background: #8b5cf6; color: white; }
+    .btn-purple:hover { background: #7c3aed; }
+    .btn-green { background: #10b981; color: white; }
+    .btn-green:hover { background: #059669; }
+    .btn-gray { background: #6b7280; color: white; }
+    .btn-gray:hover { background: #4b5563; }
+
+    .progress-counter {
+      background: linear-gradient(45deg, #8b5cf6, #3b82f6);
+      border-radius: 8px;
+      padding: 15px 20px;
+      margin-bottom: 20px;
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+
+    .progress-counter h3 {
+      margin-bottom: 10px;
+      color: white;
+      font-size: 1.1rem;
+    }
+
+    .progress-numbers {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-bottom: 10px;
+    }
+
+    .progress-item {
+      text-align: center;
+    }
+
+    .progress-value {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #00ff88;
+    }
+
+    .progress-label {
+      font-size: 0.9rem;
+      color: #e5e7eb;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #00d4ff);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      width: 25%;
+    }
+
+    .live-update-indicator {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+      background: rgba(0, 255, 136, 0.2);
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      padding: 8px 15px;
+      border-radius: 15px;
+      font-size: 1rem;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .live-update-indicator .pulse-dot {
+      width: 6px;
+      height: 6px;
+      background: #00ff88;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    .df-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: #00d4ff;
+      font-weight: 600;
+    }
+
+    .df-checkbox input {
+      width: auto;
+      transform: scale(1.2);
+      cursor: pointer;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #374151;
+      border-radius: 10px;
+      overflow: hidden;
+      font-size: 14px;
+      table-layout: fixed;
+    }
+
+    .table-header {
+      background: linear-gradient(135deg, #1f2937, #374151);
+      border-bottom: 2px solid #4b5563;
+    }
+
+    .table-header th {
+      padding: 12px 4px;
+      text-align: left;
+      color: #e5e7eb;
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+      transition: all 0.3s ease;
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .table-header th:last-child {
+      border-right: none;
+    }
+
+    .table-header th:hover {
+      background: rgba(59, 130, 246, 0.1);
+      color: #3b82f6;
+    }
+
+    .sort-icon {
+      position: absolute;
+      right: 2px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 8px;
+      opacity: 0.5;
+      transition: all 0.3s ease;
+    }
+
+    .table-header th:hover .sort-icon {
+      opacity: 1;
+      color: #3b82f6;
+    }
+
+    .table-header th.sort-asc .sort-icon {
+      opacity: 1;
+      color: #10b981;
+      transform: translateY(-50%) rotate(0deg);
+    }
+
+    .table-header th.sort-desc .sort-icon {
+      opacity: 1;
+      color: #ef4444;
+      transform: translateY(-50%) rotate(180deg);
+    }
+
+    .table-header th:nth-child(1) { width: 16%; }
+    .table-header th:nth-child(2) { width: 6%; }
+    .table-header th:nth-child(3) { width: 7%; }
+    .table-header th:nth-child(4) { width: 8%; }
+    .table-header th:nth-child(5) { width: 8%; }
+    .table-header th:nth-child(6) { width: 8%; }
+    .table-header th:nth-child(7) { width: 6%; }
+    .table-header th:nth-child(8) { width: 7%; }
+    .table-header th:nth-child(9) { width: 6%; }
+    .table-header th:nth-child(10) { width: 9%; }
+    .table-header th:nth-child(11) { width: 6%; }
+    .table-header th:nth-child(12) { width: 13%; }
+
+    tbody td {
+      padding: 11px 4px;
+      border-bottom: 1px solid #4b5563;
+      word-wrap: break-word;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    tbody tr td:nth-child(1) { width: 16%; }
+    tbody tr td:nth-child(2) { width: 6%; }
+    tbody tr td:nth-child(3) { width: 7%; }
+    tbody tr td:nth-child(4) { width: 8%; }
+    tbody tr td:nth-child(5) { width: 8%; }
+    tbody tr td:nth-child(6) { width: 8%; }
+    tbody tr td:nth-child(7) { width: 6%; }
+    tbody tr td:nth-child(8) { width: 7%; }
+    tbody tr td:nth-child(9) { width: 6%; }
+    tbody tr td:nth-child(10) { width: 9%; }
+    tbody tr td:nth-child(11) { width: 6%; }
+    tbody tr td:nth-child(12) { width: 13%; }
+
+    tbody tr {
+      transition: all 0.2s;
+    }
+
+    tbody tr:hover {
+      background: rgba(107, 114, 128, 0.1);
+    }
+
+    .border-green {
+      border-left: 4px solid #10b981;
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .border-red {
+      border-left: 4px solid #ef4444;
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    .border-blue {
+      border-left: 4px solid #3b82f6;
+      background: rgba(59, 130, 246, 0.05);
+    }
+
+    .timeframe-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 10px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+    }
+
+    .checkbox-label input {
+      width: auto;
+    }
+
+    .historical-badge {
+      background: #6b7280;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      margin-left: 5px;
+    }
+
+    .new-badge {
+      background: #10b981;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      margin-left: 5px;
+    }
+
+    .priority-badge {
+      background: linear-gradient(45deg, #ff4444, #ff6b6b);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: bold;
+      margin-left: 5px;
+      animation: priorityPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes priorityPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .high-badge {
+      background: linear-gradient(45deg, #f97316, #ea580c);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+    .medium-badge {
+      background: linear-gradient(45deg, #10b981, #059669);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+    .low-badge {
+      background: linear-gradient(45deg, #6b7280, #4b5563);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 8px;
+      font-weight: bold;
+      margin-left: 5px;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: #9ca3af;
+    }
+
+    .no-data h3 {
+      font-size: 1.25rem;
+      margin-bottom: 10px;
+    }
+
+    .no-data p {
+      font-size: 0.875rem;
+      margin-bottom: 5px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    /* Production Environment Indicator */
+    .environment-indicator {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid #10b981;
+      color: #10b981;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      z-index: 1000;
+    }
+
+    /* Loading Spinner */
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: #00ff88;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .container {
+        padding: 10px;
+      }
+      
+      h1 {
+        font-size: 1.5rem;
+      }
+      
+      .production-badge {
+        font-size: 0.7rem;
+        padding: 2px 8px;
+      }
+      
+      .panel {
+        padding: 15px;
+      }
+      
+      .progress-numbers {
+        flex-direction: column;
+        gap: 10px;
+      }
+      
+      table {
+        font-size: 12px;
+      }
+      
+      .table-header th,
+      tbody td {
+        padding: 8px 2px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Production Environment Indicator -->
+  <div class="environment-indicator" id="environmentIndicator">
+    PRODUCTION
+  </div>
+
+  <div class="container">
+    <h1>
+      📊 FVG Scanner - Production
+      <span class="production-badge">LIVE</span>
+      <span id="status-indicator" class="status-indicator status-connecting"></span>
+    </h1>
+
+    <!-- Progress Counter with Live Update Indicator -->
+    <div class="progress-counter">
+      <h3>🚀 Real-Time FVG Scanning - Production Mode</h3>
+      <div class="progress-numbers">
+        <div class="progress-item">
+          <div class="progress-value" id="scannedCount">0</div>
+          <div class="progress-label">Scanned</div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-value" id="remainingCount">450</div>
+          <div class="progress-label">Remaining</div>
+        </div>
+        <div class="progress-item">
+          <div class="progress-value" id="totalCount">450</div>
+          <div class="progress-label">Total</div>
+        </div>
+      </div>
+      <div class="live-update-indicator" id="liveUpdateIndicator">
+        <span class="pulse-dot"></span>
+        <span>Production Updates Active</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="panel" style="padding: 15px 20px;">
+      <div style="display: grid; grid-template-columns: 250px 150px 180px auto; gap: 15px; align-items: start;">
+        <div>
+          <label style="margin-bottom: 8px; display: block;">Select Timeframes:</label>
+          <div class="timeframe-grid">
+            <label class="checkbox-label">
+              <input type="checkbox" class="timeframe-check" value="4h" checked> 
+              4H <span class="timeframe-strength strength-medium">Med</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" class="timeframe-check" value="12h" checked> 
+              12H <span class="timeframe-strength strength-strong">Strong</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" class="timeframe-check" value="1d" checked> 
+              1D <span class="timeframe-strength strength-very-strong">V.Strong</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" class="timeframe-check" value="1w" checked> 
+              1W <span class="timeframe-strength strength-institutional">Inst</span>
+            </label>
+          </div>
+        </div>
+        <div>
+          <label for="maxDistance" style="margin-bottom: 8px; display: block;">Distance (%):</label>
+          <input id="maxDistance" type="number" value="20" min="0" max="100" step="0.1" style="height: 40px;" />
+          <div class="df-checkbox">
+            <input type="checkbox" id="dynamicFilteringCheckbox" checked>
+            <label for="dynamicFilteringCheckbox">DF</label>
+          </div>
+        </div>
+        <div>
+          <label for="fvgFilter" style="margin-bottom: 8px; display: block;">FVG Type:</label>
+          <select id="fvgFilter" style="height: 40px;">
+            <option value="all">All FVGs</option>
+            <option value="bullish">Bullish</option>
+            <option value="bearish">Bearish</option>
+            <option value="touching">Touching</option>
+            <option value="historical">Historical</option>
+            <option value="new">New</option>
+            <option value="tested">Tested</option>
+            <option value="untested">Untested</option>
+            <option value="extreme_orders">💥 EXTREME Orders</option>
+            <option value="strong_orders">🚀 STRONG Orders</option>
+            <option value="institutional">🏛️ Institutional</option>
+            <option value="blocks">🎯 All Blocks</option>
+            <option value="extreme_blocks">🔥 EXTREME Blocks</option>
+            <option value="strong_blocks">💪 STRONG Blocks</option>
+          </select>
+          <div style="margin-top: 8px;">
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" id="showTestData"> Test Data
+            </label>
+            <label class="checkbox-label" style="font-size: 0.85rem;">
+              <input type="checkbox" id="enableNotifications"> 🔔 Alerts
+            </label>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 28px;">
+          <button id="pauseBtn" class="btn-blue" style="min-width: 80px; padding: 8px 12px; font-size: 12px;">⏸ Pause</button>
+          <button id="clearBtn" class="btn-purple" style="min-width: 80px; padding: 8px 12px; font-size: 12px;">🧹 Clear</button>
+          <button id="reconnectBtn" class="btn-green" style="min-width: 80px; padding: 8px 12px; font-size: 12px;">🔄 Reconnect</button>
+          <button id="toggleDebug" class="btn-gray" style="min-width: 80px; padding: 8px 12px; font-size: 12px;">📝 Debug</button>
+        </div>
+      </div>
+      <div id="debugLog" class="debug-log hidden"></div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="panel">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; text-align: center;">
+        <div class="stat">
+          <div class="stat-number green" id="totalFVGs" style="font-size: 1.3rem;">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Total FVGs</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number blue" id="bullishFVGs" style="font-size: 1.3rem;">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Bullish</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number red" id="bearishFVGs" style="font-size: 1.3rem;">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Bearish</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number yellow" id="touchingFVGs" style="font-size: 1.3rem;">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Touching</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #ff4444;" id="extremeVolumeCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">EXTREME Vol</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #f97316;" id="highVolumeCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">HIGH Vol</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #ff4444;" id="extremeOrdersCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">💥 EXTREME Orders</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #f97316;" id="strongOrdersCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">🚀 STRONG Orders</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #10b981;" id="mediumOrdersCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">⚡ MEDIUM Orders</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #8b5cf6;" id="institutionalCount">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">🏛️ Institutional</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #00ff88;" id="avgPowerScore">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Avg Power</div>
+        </div>
+        <div class="stat">
+          <div class="stat-number" style="font-size: 1.3rem; color: #00d4ff;" id="totalUnfilledOrders">0</div>
+          <div class="stat-label" style="font-size: 0.7rem;">Total Unfilled</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="panel">
+      <table>
+        <thead class="table-header">
+          <tr>
+            <th data-sort="pair" class="sortable">
+              Pair + Predictions + Blocks
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="tf" class="sortable">
+              TF
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="type" class="sortable">
+              Type
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="gap_low" class="sortable">
+              Gap Low
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="gap_high" class="sortable">
+              Gap High
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="current_price" class="sortable">
+              Current Price
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="distance_pct" class="sortable">
+              Distance %
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="volume_strength" class="sortable">
+              Volume
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="volume_ratio" class="sortable">
+              Vol Ratio
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="unfilled_orders" class="sortable">
+              💰 Unfilled Orders
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="status" class="sortable">
+              Status
+              <span class="sort-icon">▼</span>
+            </th>
+            <th data-sort="time" class="sortable">
+              Time + Blacklist
+              <span class="sort-icon">▼</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="fvgTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- No Data Message -->
+    <div id="noDataMessage" class="no-data">
+      <h3>🚀 Production FVG Scanner Loading...</h3>
+      <p>Analyzing 450+ active cryptocurrency pairs in production environment...</p>
+      <p>Processing 500 historical candles + unfilled order tracking...</p>
+      <p>Pine Script volumetric FVG detection with accumulated order pressure...</p>
+      <p>💰 Tracking unfilled buy/sell orders waiting in each FVG...</p>
+      <p>🏛️ Detecting institutional-size accumulated orders...</p>
+      <p>🎯 Detecting multi-timeframe FVG blocks for confluence...</p>
+      <p>🔥 Block badges will show when timeframes align...</p>
+      <p>Connection: <span id="connectionText" class="yellow">Connecting to Production...</span></p>
+      <div style="margin-top: 20px;">
+        <div class="loading-spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Production Configuration Script -->
+  <script>
+    // Production environment detection
+    window.PRODUCTION_CONFIG = {
+      version: "2.1.0",
+      environment: "production",
+      isProduction: true,
+      historicalCandles: 500,
+      unlimitedStorage: true,
+      smartMemoryManagement: true,
+      fixedBlockDetection: true,
+      realTimeUpdates: true,
+      dynamicFiltering: true,
+      startTime: Date.now()
+    };
+
+    // Update environment indicator
+    document.addEventListener('DOMContentLoaded', function() {
+      const envIndicator = document.getElementById('environmentIndicator');
+      if (window.location.hostname.includes('railway.app') || 
+          window.location.hostname.includes('up.railway.app')) {
+        envIndicator.textContent = 'RAILWAY PRODUCTION';
+        envIndicator.style.background = 'rgba(139, 92, 246, 0.2)';
+        envIndicator.style.borderColor = '#8b5cf6';
+        envIndicator.style.color = '#8b5cf6';
+      } else if (window.location.protocol === 'https:') {
+        envIndicator.textContent = 'HTTPS PRODUCTION';
+      } else {
+        envIndicator.textContent = 'DEVELOPMENT';
+        envIndicator.style.background = 'rgba(249, 115, 22, 0.2)';
+        envIndicator.style.borderColor = '#f97316';
+        envIndicator.style.color = '#f97316';
+      }
+    });
+  </script>
+
+  <!-- Load Production Scripts -->
+  <script src="/script.js"></script>
+</body>
+</html>
