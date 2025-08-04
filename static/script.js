@@ -1,944 +1,632 @@
-// COMPLETE FIXED SCRIPT.JS - FINAL VERSION WITH CORRECT DATA MAPPING
-// ✅ PRODUCTION: WebSocket Auto-Detection for Railway
-// ✅ FIXED: Correct fvg_type mapping from backend
-// ✅ COMPLETE: All UI functionality working
-// 🚀 RAILWAY: Replace your entire script.js with this file
+// 🚀 PRODUCTION SCRIPT.JS - Pine Script FVG Scanner
+// ✅ PRODUCTION: Automatic environment detection
+// ✅ PRODUCTION: Proper WebSocket URL handling  
+// ✅ PRODUCTION: Pine Script proximity logic
+// ✅ RAILWAY: Optimized for Railway deployment
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("🚀 PRODUCTION: FVG Scanner with Auto WebSocket Detection");
+    console.log("🚀 PRODUCTION: FVG Scanner with Pine Script Logic initializing...");
     
-    // ========== GLOBAL VARIABLES ==========
-    
-    // WebSocket variables
-    let ws;
-    let reconnectAttempts = 0;
-    const maxReconnectAttempts = 10;
-    let reconnectDelay = 1000;
-    let isConnected = false;
-    let heartbeatInterval;
-    let isPaused = false;
-    
-    // FVG Data Storage
+    // Global variables
     window.fvgData = [];
-    window.selectedTimeframes = new Set(['4h', '12h', '1d', '1w']);
-    
-    // Progress tracking
-    let progressData = {
-        scanned: 0,
-        remaining: 450,
-        total: 450
-    };
-    
-    // Current sort configuration
-    let currentSort = {
-        column: 'distance_pct',
-        direction: 'asc'
+    window.ws = null;
+    window.isConnected = false;
+    window.isScanning = false;
+    window.pineSettings = {
+        proximityFilter: 1.0,  // Default 1.0% like Pine Script
+        showBlocks: true,
+        showTouched: true,
+        alertsEnabled: true
     };
     
     // Statistics tracking
-    let stats = {
+    window.stats = {
+        totalPairs: 0,
+        scannedPairs: 0,
         totalFVGs: 0,
         bullishFVGs: 0,
         bearishFVGs: 0,
-        touchingFVGs: 0,
-        extremeVolumeCount: 0,
-        highVolumeCount: 0,
-        extremeOrdersCount: 0,
-        strongOrdersCount: 0,
-        mediumOrdersCount: 0,
-        institutionalCount: 0,
-        avgPowerScore: 0,
-        totalUnfilledOrders: 0
+        institutionalBlocks: 0,
+        touchedFVGs: 0
     };
     
-    // ========== WEBSOCKET FUNCTIONS ==========
-    
-    function getWebSocketURL() {
-        const protocol = location.protocol === "https:" ? "wss" : "ws";
-        const host = location.hostname;
-        const port = location.port;
+    // Initialize WebSocket connection
+    function initializeWebSocket() {
+        console.log("🚀 PRODUCTION: Initializing WebSocket connection...");
         
-        // Production configuration from server
-        if (window.PRODUCTION_CONFIG && window.PRODUCTION_CONFIG.websocketUrl) {
-            console.log("🌐 PRODUCTION: Using server-provided WebSocket URL");
-            return window.PRODUCTION_CONFIG.websocketUrl;
+        // Auto-detect WebSocket URL based on environment
+        let wsUrl;
+        const currentHost = window.location.host;
+        
+        if (currentHost.includes('railway.app')) {
+            wsUrl = `wss://${currentHost}/ws`;
+            console.log("🚂 RAILWAY: Detected Railway deployment -", wsUrl);
+        } else if (currentHost.includes('localhost') || currentHost.includes('127.0.0.1')) {
+            wsUrl = `ws://${currentHost}/ws`;
+            console.log("🏠 LOCAL: Detected local development -", wsUrl);
+        } else {
+            // Production fallback
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${currentHost}/ws`;
+            console.log("🌐 PRODUCTION: Auto-detected WebSocket URL -", wsUrl);
         }
         
-        // Auto-detect Railway deployment
-        if (host.includes('railway.app') || host.includes('up.railway.app')) {
-            const wsUrl = `wss://${host}/ws`;
-            console.log(`🚂 RAILWAY: Detected Railway deployment - ${wsUrl}`);
-            return wsUrl;
-        }
-        
-        // Auto-detect other HTTPS deployments
-        if (protocol === "https:") {
-            const wsUrl = `wss://${host}/ws`;
-            console.log(`🔒 HTTPS: Using secure WebSocket - ${wsUrl}`);
-            return wsUrl;
-        }
-        
-        // Local development fallback
-        const wsUrl = `${protocol}://${host}:${port || 8000}/ws`;
-        console.log(`💻 LOCAL: Using development WebSocket - ${wsUrl}`);
-        return wsUrl;
+        connectWebSocket(wsUrl);
     }
-
-    function connectWebSocket() {
+    
+    // WebSocket connection function
+    function connectWebSocket(url) {
+        console.log("🔗 PRODUCTION: Connecting to", url);
+        
         try {
-            const wsUrl = getWebSocketURL();
-            console.log(`🔗 PRODUCTION: Connecting to ${wsUrl}`);
+            window.ws = new WebSocket(url);
             
-            if (ws) {
-                ws.close();
-            }
-            
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = function(event) {
+            window.ws.onopen = function(event) {
                 console.log("✅ PRODUCTION: WebSocket connected successfully");
-                isConnected = true;
-                reconnectAttempts = 0;
-                reconnectDelay = 1000;
+                window.isConnected = true;
+                updateConnectionStatus(true);
                 
-                updateConnectionStatus('connected');
-                startHeartbeat();
+                // Send ping every 30 seconds to keep connection alive (Railway requirement)
+                setInterval(() => {
+                    if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+                        window.ws.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 30000);
             };
-
-            ws.onmessage = function(event) {
+            
+            window.ws.onmessage = function(event) {
                 try {
                     const data = JSON.parse(event.data);
-                    
-                    // Handle different message types
-                    if (data.type === "welcome") {
-                        console.log("🎉 PRODUCTION: Welcome message received", data.environment);
-                        handleWelcomeMessage(data);
-                    } else if (data.type === "heartbeat") {
-                        console.log("💓 PRODUCTION: Heartbeat received");
-                        handleHeartbeat(data);
-                    } else if (data.type === "price_update" || data.type === "live_price_update") {
-                        handlePriceUpdate(data);
-                    } else if (data.pair && data.tf && data.type) {
-                        // FVG data - FIXED to use correct mapping
-                        handleFVGData(data);
-                    }
-                    
+                    handleWebSocketMessage(data);
                 } catch (error) {
-                    console.error("❌ PRODUCTION: Error parsing WebSocket message:", error);
+                    console.error("❌ Error parsing WebSocket message:", error);
                 }
             };
-
-            ws.onclose = function(event) {
-                console.log(`❌ PRODUCTION: WebSocket closed. Code: ${event.code}, Reason: ${event.reason}`);
-                isConnected = false;
-                updateConnectionStatus('disconnected');
-                stopHeartbeat();
+            
+            window.ws.onclose = function(event) {
+                console.log("❌ PRODUCTION: WebSocket connection closed:", event.code, event.reason);
+                window.isConnected = false;
+                updateConnectionStatus(false);
                 
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    console.log(`🔄 PRODUCTION: Reconnection attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectDelay}ms`);
-                    
-                    setTimeout(() => {
-                        connectWebSocket();
-                    }, reconnectDelay);
-                    
-                    reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
-                } else {
-                    console.error("❌ PRODUCTION: Max reconnection attempts reached");
-                    updateConnectionStatus('failed');
-                }
+                // Attempt to reconnect after 5 seconds
+                setTimeout(() => {
+                    console.log("🔄 PRODUCTION: Attempting to reconnect...");
+                    connectWebSocket(url);
+                }, 5000);
             };
-
-            ws.onerror = function(event) {
-                console.error("❌ PRODUCTION: WebSocket error occurred", event);
-                updateConnectionStatus('error');
+            
+            window.ws.onerror = function(error) {
+                console.error("❌ PRODUCTION: WebSocket error:", error);
+                updateConnectionStatus(false);
             };
-
+            
         } catch (error) {
             console.error("❌ PRODUCTION: Failed to create WebSocket connection:", error);
-            updateConnectionStatus('error');
+            updateConnectionStatus(false);
         }
     }
-
-    function startHeartbeat() {
-        heartbeatInterval = setInterval(() => {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                console.log("💓 PRODUCTION: WebSocket heartbeat check - OK");
-            } else {
-                console.warn("⚠️ PRODUCTION: WebSocket connection lost, attempting reconnect");
-                connectWebSocket();
-            }
-        }, 60000);
-    }
-
-    function stopHeartbeat() {
-        if (heartbeatInterval) {
-            clearInterval(heartbeatInterval);
-            heartbeatInterval = null;
-        }
-    }
-
-    function updateConnectionStatus(status) {
-        const statusIndicator = document.getElementById('status-indicator');
-        const connectionText = document.getElementById('connectionText');
+    
+    // Handle WebSocket messages
+    function handleWebSocketMessage(data) {
+        console.log("📨 Message type:", data.type);
         
-        if (statusIndicator) {
-            statusIndicator.className = `status-indicator status-${status}`;
-        }
-        
-        if (connectionText) {
-            const statusMessages = {
-                'connected': 'Production Connected ✅',
-                'disconnected': 'Disconnected ❌',
-                'connecting': 'Connecting... 🔄',
-                'error': 'Connection Error ❌',
-                'failed': 'Connection Failed ❌'
-            };
-            
-            connectionText.textContent = statusMessages[status] || 'Unknown Status';
-            connectionText.className = status === 'connected' ? 'green' : 'red';
+        switch (data.type) {
+            case 'connection_established':
+                console.log("🎉 PRODUCTION: Connection established -", data.message);
+                if (data.stats) {
+                    window.stats = data.stats;
+                    updateStatistics();
+                }
+                if (data.settings) {
+                    window.pineSettings = { ...window.pineSettings, ...data.settings };
+                    updateSettingsUI();
+                }
+                break;
+                
+            case 'fvg_data':
+                handleFVGData(data.data);
+                if (data.stats) {
+                    window.stats = data.stats;
+                    updateStatistics();
+                }
+                break;
+                
+            case 'stats_update':
+                if (data.stats) {
+                    window.stats = data.stats;
+                    updateStatistics();
+                }
+                break;
+                
+            case 'scan_status':
+                handleScanStatus(data);
+                break;
+                
+            case 'settings_updated':
+                if (data.settings) {
+                    window.pineSettings = { ...window.pineSettings, ...data.settings };
+                    updateSettingsUI();
+                }
+                break;
+                
+            case 'pong':
+                console.log("🏓 Ping-pong successful");
+                break;
+                
+            default:
+                console.log("📊 Unhandled message type:", data.type, data);
         }
     }
-
-    function handleWelcomeMessage(data) {
-        console.log("🎉 PRODUCTION: Connected to FVG Scanner", data.server_version);
-        
-        if (data.environment) {
-            console.log(`🌍 Environment: ${data.environment}`);
-        }
-        
-        if (data.features) {
-            console.log("✅ Features available:", Object.keys(data.features));
-        }
-    }
-
-    function handleHeartbeat(data) {
-        if (data.server_stats) {
-            console.log(`📊 Server stats: ${data.server_stats.active_clients} clients, ${data.server_stats.uptime_seconds}s uptime`);
-        }
-    }
-
-    function handlePriceUpdate(data) {
-        if (data.pair && data.current_price) {
-            console.log(`💰 Price update: ${data.pair} = ${data.current_price}`);
-            updatePriceInTable(data.pair, data.current_price);
-        }
-    }
-
-    // ========== FIXED FVG DATA HANDLER ==========
+    
+    // Handle FVG data with Pine Script logic
     function handleFVGData(data) {
-        console.log(`📊 FVG data: ${data.pair} ${data.tf} ${data.type}`);
+        if (!data) return;
         
-        // DEBUG: Log the raw data
-        console.log("🔍 RAW FVG DATA:", data);
+        console.log("📊 Processing FVG data:", data.pair, data.tf, data.fvg_type);
         
-        // ✅ FIXED: Use the correct fvg_type field from your backend
-        const mappedData = {
-            // Basic fields
-            pair: data.pair || 'UNKNOWN',
-            tf: data.tf || '4h',
-            type: data.fvg_type || data.type || 'Unknown', // ✅ FIX: Use fvg_type field!
-            
-            // Price fields
-            gap_low: data.gap_low || data.bottom || 0,
-            gap_high: data.gap_high || data.top || 0,
-            current_price: data.current_price || 0,
-            
-            // Distance and status
-            distance_pct: data.distance_pct || 0,
-            is_touching: data.is_touching || false,
-            tested: data.tested || false,
-            
-            // Volume fields - your backend has these!
+        // Create enhanced FVG entry with Pine Script features
+        const fvgEntry = {
+            id: `${data.pair}_${data.tf}_${Date.now()}_${Math.random()}`,
+            pair: data.pair,
+            timeframe: data.tf,
+            type: data.fvg_type,  // Use fvg_type instead of type
+            gap_low: data.gap_low,
+            gap_high: data.gap_high,
+            gap_size: data.gap_size,
+            distance_percentage: data.distance_percentage || 0,
+            is_within_proximity: data.is_within_proximity || false,
+            is_touched: data.is_touched || false,
             volume_strength: data.volume_strength || 0,
-            volume_tier: data.volume_tier || 'UNKNOWN',
-            volume_ratio: data.volume_ratio || 1.0,
-            volume_significant: data.volume_significant || false,
-            
-            // Order and strength fields - your backend has these!
             unfilled_orders: data.unfilled_orders || 0,
-            unfilled_orders_formatted: data.unfilled_orders_formatted || '0',
-            order_density: data.order_density || 0,
+            unfilled_orders_formatted: data.unfilled_orders_formatted || formatOrders(data.unfilled_orders || 0),
             power_score: data.power_score || 0,
-            strength_level: data.strength_level || 'WEAK',
-            strength_emoji: data.strength_emoji || '📊',
-            
-            // Institutional data
-            institutional_size: data.institutional_size || false,
-            institutional_marker: data.institutional_marker || '',
-            
-            // Block detection - your backend isn't sending this yet
+            strength: data.strength || 0,
+            timestamp: data.timestamp || new Date().toISOString(),
             is_block_member: data.is_block_member || false,
             block_badge: data.block_badge || '',
-            block_strength: data.block_strength || 'NONE',
-            block_timeframes: data.block_timeframes || '',
-            block_power: data.block_power || 0,
-            block_total_unfilled: data.block_total_unfilled || 0,
+            block_id: data.block_id || null,
             
-            // Time fields
-            time: data.time || data.timestamp || Date.now(),
-            is_historical: data.is_historical !== false,
-            
-            // Additional fields
-            gap_size: data.gap_size || ((data.gap_high || 0) - (data.gap_low || 0)),
-            mitigated: data.mitigated || false,
-            expected_move_pct: data.expected_move_pct || 0,
-            trigger_probability: data.trigger_probability || 0,
-            
-            // Pass through any other fields
-            ...data
+            // Pine Script specific fields
+            pine_distance: data.distance_percentage,
+            pine_proximity: data.is_within_proximity,
+            pine_touched: data.is_touched,
+            pine_strength: data.strength
         };
         
-        console.log("🔧 MAPPED DATA (using fvg_type):", mappedData);
+        // Add to global data array
+        window.fvgData.push(fvgEntry);
         
-        // Add to FVG data array
-        window.fvgData.unshift(mappedData);
-        
-        // Update progress
-        progressData.scanned++;
-        progressData.remaining = Math.max(0, progressData.total - progressData.scanned);
-        updateProgressDisplay();
-        
-        // Filter and display if not paused
-        if (!isPaused) {
-            window.filterAndDisplayData();
+        // Limit array size for performance (keep last 1000 FVGs)
+        if (window.fvgData.length > 1000) {
+            window.fvgData = window.fvgData.slice(-1000);
         }
+        
+        // Check for alerts
+        checkFVGAlerts(fvgEntry);
+        
+        // Update display
+        filterAndDisplayData();
     }
-
-    function updatePriceInTable(pair, newPrice) {
-        try {
-            const tbody = document.getElementById('fvgTableBody');
-            if (!tbody) return;
-
-            Array.from(tbody.children).forEach(row => {
-                if (row.cells && row.cells[0] && row.cells[0].textContent.includes(pair)) {
-                    const priceCell = row.cells[5]; // Current price column
-                    if (priceCell) {
-                        priceCell.textContent = parseFloat(newPrice).toFixed(6);
-                        
-                        // Add visual feedback
-                        priceCell.style.backgroundColor = 'rgba(0, 255, 136, 0.5)';
-                        setTimeout(() => {
-                            priceCell.style.backgroundColor = '';
-                        }, 500);
-                    }
-                }
-            });
-        } catch (error) {
-            console.error("❌ Error updating price in table:", error);
-        }
-    }
-
-    // ========== UI UPDATE FUNCTIONS ==========
     
-    function updateProgressDisplay() {
-        const scannedElement = document.getElementById('scannedCount');
-        const remainingElement = document.getElementById('remainingCount');
-        const totalElement = document.getElementById('totalCount');
-        const progressFill = document.getElementById('progressFill');
+    // Pine Script alert system
+    function checkFVGAlerts(fvg) {
+        if (!window.pineSettings.alertsEnabled) return;
         
-        if (scannedElement) scannedElement.textContent = progressData.scanned;
-        if (remainingElement) remainingElement.textContent = progressData.remaining;
-        if (totalElement) totalElement.textContent = progressData.total;
+        // Touch alert
+        if (fvg.is_touched) {
+            showAlert(`🎯 FVG TOUCHED: ${fvg.pair} ${fvg.timeframe} ${fvg.type} FVG`, 'touch');
+        }
         
-        if (progressFill) {
-            const percentage = (progressData.scanned / progressData.total) * 100;
-            progressFill.style.width = `${Math.min(percentage, 100)}%`;
+        // Proximity alert
+        if (fvg.is_within_proximity && fvg.distance_percentage <= 0.5) {
+            showAlert(`⚠️ PROXIMITY: ${fvg.pair} ${fvg.timeframe} ${fvg.type} FVG - ${fvg.distance_percentage}%`, 'proximity');
+        }
+        
+        // Block alert
+        if (fvg.is_block_member) {
+            showAlert(`🔥 BLOCK DETECTED: ${fvg.block_badge}`, 'block');
         }
     }
-
-    // ========== MAIN FILTERING AND DISPLAY FUNCTION ==========
-    window.filterAndDisplayData = function() {
-        if (!window.fvgData || window.fvgData.length === 0) {
-            showNoDataMessage();
-            return;
-        }
+    
+    // Alert display function
+    function showAlert(message, type) {
+        console.log(`🚨 ALERT [${type.toUpperCase()}]: ${message}`);
         
-        // Get filter values
-        const maxDistance = parseFloat(document.getElementById('maxDistance')?.value || 20);
-        const fvgFilter = document.getElementById('fvgFilter')?.value || 'all';
-        const showTestData = document.getElementById('showTestData')?.checked || false;
-        const dynamicFiltering = document.getElementById('dynamicFilteringCheckbox')?.checked !== false;
+        // Create alert element
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type}`;
+        alertDiv.textContent = message;
+        alertDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: ${type === 'touch' ? '#ff4444' : type === 'block' ? '#ff8800' : '#ffaa00'};
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 10000;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            animation: slideIn 0.3s ease-out;
+        `;
         
-        // Filter data
-        let filteredData = window.fvgData.filter(fvg => {
-            // Timeframe filter
-            if (!window.selectedTimeframes.has(fvg.tf)) {
-                return false;
+        document.body.appendChild(alertDiv);
+        
+        // Remove after 5 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
             }
-            
-            // Distance filter
-            if (dynamicFiltering && fvg.distance_pct > maxDistance) {
-                return false;
-            }
-            
-            // Type filter
-            if (fvgFilter === 'bullish' && fvg.type !== 'Bullish') return false;
-            if (fvgFilter === 'bearish' && fvg.type !== 'Bearish') return false;
-            if (fvgFilter === 'touching' && !fvg.is_touching) return false;
-            if (fvgFilter === 'historical' && !fvg.is_historical) return false;
-            if (fvgFilter === 'new' && fvg.is_historical) return false;
-            if (fvgFilter === 'tested' && !fvg.tested) return false;
-            if (fvgFilter === 'untested' && fvg.tested) return false;
-            if (fvgFilter === 'extreme_orders' && fvg.strength_level !== 'EXTREME') return false;
-            if (fvgFilter === 'strong_orders' && fvg.strength_level !== 'STRONG') return false;
-            if (fvgFilter === 'institutional' && !fvg.institutional_size) return false;
-            if (fvgFilter === 'blocks' && !fvg.is_block_member) return false;
-            if (fvgFilter === 'extreme_blocks' && (!fvg.is_block_member || fvg.block_strength !== 'EXTREME')) return false;
-            if (fvgFilter === 'strong_blocks' && (!fvg.is_block_member || fvg.block_strength !== 'STRONG')) return false;
-            
-            // Test data filter
-            if (!showTestData && fvg.test_data) return false;
-            
-            return true;
-        });
-        
-        // Sort data
-        sortData(filteredData);
-        
-        // Update statistics
-        updateStatistics(filteredData);
-        
-        // Display data
-        displayFVGTable(filteredData);
-        
-        // Hide no data message
-        const noDataMessage = document.getElementById('noDataMessage');
-        if (noDataMessage) {
-            noDataMessage.style.display = filteredData.length === 0 ? 'block' : 'none';
-        }
-    };
-
-    function sortData(data) {
-        data.sort((a, b) => {
-            let aVal = a[currentSort.column];
-            let bVal = b[currentSort.column];
-            
-            // Handle numeric sorting
-            if (typeof aVal === 'number' && typeof bVal === 'number') {
-                return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
-            }
-            
-            // Handle string sorting
-            aVal = String(aVal || '').toLowerCase();
-            bVal = String(bVal || '').toLowerCase();
-            
-            if (currentSort.direction === 'asc') {
-                return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-            } else {
-                return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
-            }
-        });
+        }, 5000);
     }
-
-    function updateStatistics(data) {
-        // Reset stats
-        stats = {
-            totalFVGs: data.length,
-            bullishFVGs: 0,
-            bearishFVGs: 0,
-            touchingFVGs: 0,
-            extremeVolumeCount: 0,
-            highVolumeCount: 0,
-            extremeOrdersCount: 0,
-            strongOrdersCount: 0,
-            mediumOrdersCount: 0,
-            institutionalCount: 0,
-            avgPowerScore: 0,
-            totalUnfilledOrders: 0
+    
+    // Handle scan status updates
+    function handleScanStatus(data) {
+        window.isScanning = data.status === 'started';
+        updateScanButtons();
+        
+        if (data.message) {
+            console.log("📊 Scan status:", data.message);
+        }
+    }
+    
+    // Update connection status display
+    function updateConnectionStatus(connected) {
+        const statusElement = document.getElementById('connection-status');
+        if (statusElement) {
+            statusElement.textContent = connected ? 'Connected' : 'Disconnected';
+            statusElement.className = connected ? 'status-connected' : 'status-disconnected';
+        }
+        
+        const indicator = document.querySelector('.connection-indicator');
+        if (indicator) {
+            indicator.style.backgroundColor = connected ? '#00ff00' : '#ff0000';
+        }
+    }
+    
+    // Update scan button states
+    function updateScanButtons() {
+        const startBtn = document.getElementById('start-scan');
+        const stopBtn = document.getElementById('stop-scan');
+        
+        if (startBtn) {
+            startBtn.disabled = window.isScanning || !window.isConnected;
+            startBtn.textContent = window.isScanning ? 'Scanning...' : 'Start Scan';
+        }
+        
+        if (stopBtn) {
+            stopBtn.disabled = !window.isScanning;
+        }
+    }
+    
+    // Update statistics display
+    function updateStatistics() {
+        const statElements = {
+            'total-pairs': window.stats.totalPairs || 0,
+            'scanned-pairs': window.stats.scannedPairs || 0,
+            'total-fvgs': window.stats.totalFVGs || 0,
+            'bullish-fvgs': window.stats.bullishFVGs || 0,
+            'bearish-fvgs': window.stats.bearishFVGs || 0,
+            'institutional-blocks': window.stats.institutionalBlocks || 0,
+            'touched-fvgs': window.stats.touchedFVGs || 0
         };
         
-        let totalPowerScore = 0;
-        let totalUnfilled = 0;
-        
-        data.forEach(fvg => {
-            // Type counts
-            if (fvg.type === 'Bullish') stats.bullishFVGs++;
-            if (fvg.type === 'Bearish') stats.bearishFVGs++;
-            if (fvg.is_touching) stats.touchingFVGs++;
-            
-            // Volume counts
-            if (fvg.volume_tier === 'EXTREME') stats.extremeVolumeCount++;
-            if (fvg.volume_tier === 'HIGH') stats.highVolumeCount++;
-            
-            // Order strength counts
-            if (fvg.strength_level === 'EXTREME') stats.extremeOrdersCount++;
-            if (fvg.strength_level === 'STRONG') stats.strongOrdersCount++;
-            if (fvg.strength_level === 'MEDIUM') stats.mediumOrdersCount++;
-            
-            // Institutional count
-            if (fvg.institutional_size) stats.institutionalCount++;
-            
-            // Power score and unfilled orders
-            totalPowerScore += fvg.power_score || 0;
-            totalUnfilled += fvg.unfilled_orders || 0;
-        });
-        
-        stats.avgPowerScore = data.length > 0 ? Math.round(totalPowerScore / data.length) : 0;
-        stats.totalUnfilledOrders = formatOrders(totalUnfilled);
-        
-        // Update UI
-        updateStatisticsDisplay();
-    }
-
-    function updateStatisticsDisplay() {
-        const elements = {
-            'totalFVGs': stats.totalFVGs,
-            'bullishFVGs': stats.bullishFVGs,
-            'bearishFVGs': stats.bearishFVGs,
-            'touchingFVGs': stats.touchingFVGs,
-            'extremeVolumeCount': stats.extremeVolumeCount,
-            'highVolumeCount': stats.highVolumeCount,
-            'extremeOrdersCount': stats.extremeOrdersCount,
-            'strongOrdersCount': stats.strongOrdersCount,
-            'mediumOrdersCount': stats.mediumOrdersCount,
-            'institutionalCount': stats.institutionalCount,
-            'avgPowerScore': stats.avgPowerScore,
-            'totalUnfilledOrders': stats.totalUnfilledOrders
-        };
-        
-        Object.entries(elements).forEach(([id, value]) => {
+        Object.entries(statElements).forEach(([id, value]) => {
             const element = document.getElementById(id);
             if (element) {
                 element.textContent = value;
             }
         });
+        
+        // Update progress
+        const remainingPairs = Math.max(0, window.stats.totalPairs - window.stats.scannedPairs);
+        const remainingElement = document.getElementById('remaining-pairs');
+        if (remainingElement) {
+            remainingElement.textContent = remainingPairs;
+        }
+        
+        // Update progress bar
+        const progressBar = document.querySelector('.progress-bar');
+        if (progressBar && window.stats.totalPairs > 0) {
+            const progress = (window.stats.scannedPairs / window.stats.totalPairs) * 100;
+            progressBar.style.width = `${progress}%`;
+        }
     }
-
-    function displayFVGTable(data) {
-        const tbody = document.getElementById('fvgTableBody');
+    
+    // Update settings UI
+    function updateSettingsUI() {
+        const proximityInput = document.getElementById('proximity-filter');
+        if (proximityInput) {
+            proximityInput.value = window.pineSettings.proximityFilter || 1.0;
+        }
+        
+        const showBlocksCheckbox = document.getElementById('show-blocks');
+        if (showBlocksCheckbox) {
+            showBlocksCheckbox.checked = window.pineSettings.showBlocks !== false;
+        }
+        
+        const alertsCheckbox = document.getElementById('alerts-enabled');
+        if (alertsCheckbox) {
+            alertsCheckbox.checked = window.pineSettings.alertsEnabled !== false;
+        }
+    }
+    
+    // Filter and display FVG data
+    window.filterAndDisplayData = function() {
+        const table = document.getElementById('fvg-table');
+        if (!table) return;
+        
+        const tbody = table.querySelector('tbody');
         if (!tbody) return;
         
+        // Clear existing rows
         tbody.innerHTML = '';
         
-        data.forEach(fvg => {
-            const row = createFVGRow(fvg);
+        // Get filter values
+        const typeFilter = document.getElementById('type-filter')?.value || 'all';
+        const timeframeFilter = document.getElementById('timeframe-filter')?.value || 'all';
+        const distanceFilter = parseFloat(document.getElementById('distance-filter')?.value || 100);
+        const proximityOnly = document.getElementById('proximity-only')?.checked || false;
+        const blocksOnly = document.getElementById('blocks-only')?.checked || false;
+        const touchedOnly = document.getElementById('touched-only')?.checked || false;
+        
+        // Filter data
+        let filteredData = window.fvgData.filter(fvg => {
+            // Type filter
+            if (typeFilter !== 'all' && fvg.type !== typeFilter) return false;
+            
+            // Timeframe filter
+            if (timeframeFilter !== 'all' && fvg.timeframe !== timeframeFilter) return false;
+            
+            // Distance filter
+            if (fvg.distance_percentage > distanceFilter) return false;
+            
+            // Proximity filter (Pine Script logic)
+            if (proximityOnly && !fvg.is_within_proximity) return false;
+            
+            // Blocks filter
+            if (blocksOnly && !fvg.is_block_member) return false;
+            
+            // Touched filter
+            if (touchedOnly && !fvg.is_touched) return false;
+            
+            return true;
+        });
+        
+        // Sort by distance (closest first)
+        filteredData.sort((a, b) => a.distance_percentage - b.distance_percentage);
+        
+        // Limit display for performance
+        filteredData = filteredData.slice(0, 100);
+        
+        // Create table rows
+        filteredData.forEach(fvg => {
+            const row = createFVGTableRow(fvg);
             tbody.appendChild(row);
         });
-    }
-
-    function createFVGRow(fvg) {
+        
+        // Update count
+        const countElement = document.getElementById('filtered-count');
+        if (countElement) {
+            countElement.textContent = filteredData.length;
+        }
+    };
+    
+    // Create FVG table row
+    function createFVGTableRow(fvg) {
         const row = document.createElement('tr');
-        row.className = 'enhanced-row';
         
-        // Add border color based on type
-        if (fvg.type === 'Bullish') {
-            row.classList.add('border-green');
-        } else if (fvg.type === 'Bearish') {
-            row.classList.add('border-red');
-        }
+        // Add classes based on FVG properties
+        if (fvg.is_touched) row.classList.add('fvg-touched');
+        if (fvg.is_block_member) row.classList.add('fvg-block-member');
+        if (fvg.is_within_proximity) row.classList.add('fvg-proximity');
         
-        // Add priority styling for touching FVGs
-        if (fvg.is_touching) {
-            row.classList.add('touching-priority');
-        }
-        
+        // Create row HTML
         row.innerHTML = `
             <td>
-                <strong>${fvg.pair}</strong>
-                ${fvg.is_block_member ? `<br><span style="color: #00ff88; font-size: 0.8rem;">${fvg.block_badge}</span>` : ''}
-                ${fvg.institutional_marker ? `<br><span style="color: #8b5cf6;">${fvg.institutional_marker} Institutional</span>` : ''}
+                <span class="pair-badge">${fvg.pair}</span>
+                ${fvg.is_touched ? '<span class="touch-indicator">🎯</span>' : ''}
             </td>
+            <td><span class="timeframe-badge tf-${fvg.timeframe}">${fvg.timeframe}</span></td>
             <td>
-                <span class="timeframe-strength strength-${getTimeframeStrengthClass(fvg.tf)}">${fvg.tf}</span>
+                <span class="type-badge type-${fvg.type.toLowerCase()}">${fvg.type}</span>
+                ${fvg.is_block_member ? `<div class="block-badge">${fvg.block_badge}</div>` : ''}
             </td>
-            <td>
-                <span class="${fvg.type === 'Bullish' ? 'green' : 'red'}">${fvg.type}</span>
+            <td class="price-cell">
+                <div class="gap-range">
+                    <div class="gap-high">${formatPrice(fvg.gap_high)}</div>
+                    <div class="gap-separator">—</div>
+                    <div class="gap-low">${formatPrice(fvg.gap_low)}</div>
+                </div>
             </td>
-            <td>${parseFloat(fvg.gap_low || 0).toFixed(6)}</td>
-            <td>${parseFloat(fvg.gap_high || 0).toFixed(6)}</td>
-            <td>${parseFloat(fvg.current_price || 0).toFixed(6)}</td>
-            <td>
-                <strong class="${getDistanceColor(fvg.distance_pct)}">${fvg.distance_pct}%</strong>
-                ${fvg.is_touching ? '<span class="priority-badge">TOUCHING</span>' : ''}
+            <td class="distance-cell">
+                <span class="distance-badge distance-${getDistanceClass(fvg.distance_percentage)}">
+                    ${fvg.distance_percentage.toFixed(2)}%
+                </span>
+                ${fvg.is_within_proximity ? '<span class="proximity-indicator">📍</span>' : ''}
             </td>
-            <td>
-                ${formatVolume(fvg.volume_strength || 0)}
-                ${getVolumeBadge(fvg.volume_tier)}
+            <td class="volume-cell">${formatVolume(fvg.volume_strength)}</td>
+            <td class="orders-cell">${fvg.unfilled_orders_formatted}</td>
+            <td class="power-cell">
+                <div class="power-score">
+                    <span class="score">${fvg.power_score}</span>
+                    <span class="score-max">/100</span>
+                    <div class="power-bar">
+                        <div class="power-fill" style="width: ${fvg.power_score}%"></div>
+                    </div>
+                </div>
             </td>
-            <td>${(fvg.volume_ratio || 1.0).toFixed(1)}x</td>
-            <td>
-                <strong>${fvg.unfilled_orders_formatted || '0'}</strong>
-                ${fvg.strength_emoji} ${fvg.strength_level}
-                <br><small>Power: ${fvg.power_score || 0}/100</small>
-            </td>
-            <td>
-                ${fvg.tested ? '✅ Tested' : '⭕ Untested'}
-                ${fvg.is_touching ? '<br><span class="priority-badge">TOUCHING</span>' : ''}
-                ${fvg.is_historical ? '<span class="historical-badge">Historical</span>' : '<span class="new-badge">New</span>'}
-            </td>
-            <td>
-                <small>${formatTime(fvg.time || fvg.timestamp)}</small>
+            <td class="time-cell" title="${new Date(fvg.timestamp).toLocaleString()}">
+                ${formatTimeAgo(fvg.timestamp)}
             </td>
         `;
         
         return row;
     }
-
-    // ========== HELPER FUNCTIONS ==========
     
-    function getTimeframeStrengthClass(tf) {
-        const strengthMap = {
-            '4h': 'medium',
-            '12h': 'strong', 
-            '1d': 'very-strong',
-            '1w': 'institutional'
-        };
-        return strengthMap[tf] || 'medium';
+    // Utility functions
+    function formatPrice(price) {
+        if (price >= 1) {
+            return price.toFixed(4);
+        } else {
+            return price.toFixed(8);
+        }
     }
-
-    function getDistanceColor(distance) {
-        if (distance === 0) return 'purple';
-        if (distance < 1) return 'red';
-        if (distance < 5) return 'yellow';
-        if (distance < 15) return 'green';
-        return 'gray';
-    }
-
-    function getVolumeBadge(tier) {
-        const badges = {
-            'EXTREME': '<span class="volume-badge-extreme">EXTREME</span>',
-            'HIGH': '<span class="volume-badge-high">HIGH</span>',
-            'MEDIUM': '<span class="volume-badge-medium">MED</span>',
-            'LOW': '<span class="volume-badge-low">LOW</span>'
-        };
-        return badges[tier] || '';
-    }
-
+    
     function formatVolume(volume) {
-        if (volume >= 1000000000) {
-            return `${(volume / 1000000000).toFixed(1)}B`;
-        } else if (volume >= 1000000) {
-            return `${(volume / 1000000).toFixed(1)}M`;
-        } else if (volume >= 1000) {
-            return `${(volume / 1000).toFixed(1)}K`;
+        if (volume >= 1_000_000_000) {
+            return `${(volume / 1_000_000_000).toFixed(1)}B`;
+        } else if (volume >= 1_000_000) {
+            return `${(volume / 1_000_000).toFixed(1)}M`;
+        } else if (volume >= 1_000) {
+            return `${(volume / 1_000).toFixed(1)}K`;
+        } else {
+            return volume.toString();
         }
-        return volume.toString();
     }
-
+    
     function formatOrders(orders) {
-        const num = parseFloat(orders) || 0;
-        if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}B`;
-        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-        if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
-        return num.toString();
-    }
-
-    function formatTime(timestamp) {
-        if (!timestamp) return 'Unknown';
-        const date = new Date(typeof timestamp === 'string' ? timestamp : timestamp * 1000);
-        return date.toLocaleString();
-    }
-
-    function showNoDataMessage() {
-        const noDataMessage = document.getElementById('noDataMessage');
-        if (noDataMessage) {
-            noDataMessage.style.display = 'block';
+        if (orders >= 1_000_000) {
+            return `${(orders / 1_000_000).toFixed(1)}M`;
+        } else if (orders >= 1_000) {
+            return `${(orders / 1_000).toFixed(1)}K`;
+        } else {
+            return orders.toString();
         }
     }
-
-    // ========== EVENT HANDLERS ==========
     
-    // Timeframe checkboxes
-    document.querySelectorAll('.timeframe-check').forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            if (this.checked) {
-                window.selectedTimeframes.add(this.value);
-            } else {
-                window.selectedTimeframes.delete(this.value);
-            }
-            console.log(`🔄 Timeframe ${this.value} ${this.checked ? 'enabled' : 'disabled'}`);
-            window.filterAndDisplayData();
-        });
+    function getDistanceClass(distance) {
+        if (distance <= 0.5) return 'very-close';
+        if (distance <= 1.0) return 'close';
+        if (distance <= 2.0) return 'medium';
+        if (distance <= 5.0) return 'far';
+        return 'very-far';
+    }
+    
+    function formatTimeAgo(timestamp) {
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diffMs = now - time;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${diffDays}d ago`;
+    }
+    
+    // Button event handlers
+    document.getElementById('start-scan')?.addEventListener('click', function() {
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(JSON.stringify({ type: 'start_scan' }));
+            console.log("🚀 PRODUCTION: Start scan command sent");
+        }
     });
     
-    // Filter controls
-    const maxDistanceInput = document.getElementById('maxDistance');
-    if (maxDistanceInput) {
-        maxDistanceInput.addEventListener('input', function() {
-            console.log(`🔄 Distance filter changed to ${this.value}%`);
-            window.filterAndDisplayData();
-        });
-    }
-    
-    const fvgFilterSelect = document.getElementById('fvgFilter');
-    if (fvgFilterSelect) {
-        fvgFilterSelect.addEventListener('change', function() {
-            console.log(`🔄 FVG filter changed to ${this.value}`);
-            window.filterAndDisplayData();
-        });
-    }
-    
-    const showTestDataCheck = document.getElementById('showTestData');
-    if (showTestDataCheck) {
-        showTestDataCheck.addEventListener('change', function() {
-            console.log(`🔄 Test data ${this.checked ? 'enabled' : 'disabled'}`);
-            window.filterAndDisplayData();
-        });
-    }
-    
-    const dynamicFilteringCheck = document.getElementById('dynamicFilteringCheckbox');
-    if (dynamicFilteringCheck) {
-        dynamicFilteringCheck.addEventListener('change', function() {
-            console.log(`🔄 Dynamic filtering ${this.checked ? 'enabled' : 'disabled'}`);
-            window.filterAndDisplayData();
-        });
-    }
-    
-    // Button handlers
-    const pauseBtn = document.getElementById('pauseBtn');
-    if (pauseBtn) {
-        pauseBtn.addEventListener('click', function() {
-            isPaused = !isPaused;
-            this.textContent = isPaused ? '▶️ Resume' : '⏸ Pause';
-            this.className = isPaused ? 'btn-green' : 'btn-blue';
-            console.log(`🔄 Scanner ${isPaused ? 'paused' : 'resumed'}`);
-        });
-    }
-    
-    const clearBtn = document.getElementById('clearBtn');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            window.fvgData = [];
-            progressData = { scanned: 0, remaining: 450, total: 450 };
-            updateProgressDisplay();
-            window.filterAndDisplayData();
-            console.log('🔄 Data cleared');
-        });
-    }
-    
-    const reconnectBtn = document.getElementById('reconnectBtn');
-    if (reconnectBtn) {
-        reconnectBtn.addEventListener('click', function() {
-            console.log('🔄 Manual reconnect triggered');
-            reconnectAttempts = 0;
-            reconnectDelay = 1000;
-            updateConnectionStatus('connecting');
-            connectWebSocket();
-        });
-    }
-    
-    const toggleDebugBtn = document.getElementById('toggleDebug');
-    if (toggleDebugBtn) {
-        toggleDebugBtn.addEventListener('click', function() {
-            const debugLog = document.getElementById('debugLog');
-            if (debugLog) {
-                debugLog.classList.toggle('hidden');
-                console.log('🔄 Debug log toggled');
-            }
-        });
-    }
-    
-    // Table sorting
-    document.querySelectorAll('th[data-sort]').forEach(header => {
-        header.addEventListener('click', function() {
-            const column = this.dataset.sort;
-            
-            if (currentSort.column === column) {
-                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
-            } else {
-                currentSort.column = column;
-                currentSort.direction = 'asc';
-            }
-            
-            // Update sort indicators
-            document.querySelectorAll('th[data-sort]').forEach(h => {
-                h.classList.remove('sort-asc', 'sort-desc');
-            });
-            
-            this.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
-            
-            console.log(`🔄 Sorting by ${column} (${currentSort.direction})`);
-            window.filterAndDisplayData();
-        });
+    document.getElementById('stop-scan')?.addEventListener('click', function() {
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(JSON.stringify({ type: 'stop_scan' }));
+            console.log("⏹️ PRODUCTION: Stop scan command sent");
+        }
     });
-
-    // ========== DEBUG FUNCTIONS ==========
     
-    // Debug function to analyze backend data
-    window.analyzeBackendData = function() {
-        if (window.fvgData.length === 0) {
-            console.log("❌ No FVG data available yet");
-            return;
+    document.getElementById('clear-data')?.addEventListener('click', function() {
+        window.fvgData = [];
+        filterAndDisplayData();
+        console.log("🗑️ PRODUCTION: Data cleared");
+    });
+    
+    document.getElementById('reconnect')?.addEventListener('click', function() {
+        if (window.ws) {
+            window.ws.close();
         }
+        setTimeout(initializeWebSocket, 1000);
+        console.log("🔄 PRODUCTION: Reconnection initiated");
+    });
+    
+    // Filter event handlers
+    document.getElementById('type-filter')?.addEventListener('change', filterAndDisplayData);
+    document.getElementById('timeframe-filter')?.addEventListener('change', filterAndDisplayData);
+    document.getElementById('distance-filter')?.addEventListener('input', filterAndDisplayData);
+    document.getElementById('proximity-only')?.addEventListener('change', filterAndDisplayData);
+    document.getElementById('blocks-only')?.addEventListener('change', filterAndDisplayData);
+    document.getElementById('touched-only')?.addEventListener('change', filterAndDisplayData);
+    
+    // Settings event handlers
+    document.getElementById('proximity-filter')?.addEventListener('change', function() {
+        const value = parseFloat(this.value) || 1.0;
+        window.pineSettings.proximityFilter = value;
         
-        console.log("🔍 BACKEND DATA ANALYSIS");
-        console.log("========================");
-        
-        const sample = window.fvgData[0];
-        console.log("📋 Sample FVG Record:");
-        console.log(JSON.stringify(sample, null, 2));
-        
-        console.log("\n📊 Field Analysis:");
-        Object.entries(sample).forEach(([key, value]) => {
-            const type = typeof value;
-            console.log(`  ${key}: ${value} (${type})`);
-        });
-        
-        console.log("\n🎯 Backend Data Summary:");
-        console.log(`  Total Records: ${window.fvgData.length}`);
-        console.log(`  Types seen: ${[...new Set(window.fvgData.map(f => f.type))]}`);
-        console.log(`  Timeframes: ${[...new Set(window.fvgData.map(f => f.tf))]}`);
-        console.log(`  Pairs: ${[...new Set(window.fvgData.map(f => f.pair))].slice(0, 5)}...`);
-        
-        // Check for block data
-        const blockMembers = window.fvgData.filter(f => f.is_block_member);
-        console.log(`  Block Members: ${blockMembers.length}`);
-        if (blockMembers.length > 0) {
-            console.log(`  Block Badges: ${[...new Set(blockMembers.map(f => f.block_badge))]}`);
+        if (window.ws && window.ws.readyState === WebSocket.OPEN) {
+            window.ws.send(JSON.stringify({
+                type: 'update_settings',
+                settings: { proximityFilter: value }
+            }));
         }
-        
-        // Check volume data
-        const hasVolume = window.fvgData.filter(f => f.volume_strength > 0);
-        console.log(`  Records with Volume: ${hasVolume.length}`);
-        
-        // Check unfilled orders
-        const hasOrders = window.fvgData.filter(f => f.unfilled_orders > 0);
-        console.log(`  Records with Unfilled Orders: ${hasOrders.length}`);
+    });
+    
+    document.getElementById('show-blocks')?.addEventListener('change', function() {
+        window.pineSettings.showBlocks = this.checked;
+        filterAndDisplayData();
+    });
+    
+    document.getElementById('alerts-enabled')?.addEventListener('change', function() {
+        window.pineSettings.alertsEnabled = this.checked;
+    });
+    
+    // Debug functions for console
+    window.debugFVGData = function() {
+        console.log("🔍 CURRENT FVG DATA:", window.fvgData);
+        console.log("📊 STATISTICS:", window.stats);
+        console.log("⚙️ SETTINGS:", window.pineSettings);
+        console.log("🔗 CONNECTION:", window.isConnected ? 'Connected' : 'Disconnected');
+        console.log("🚀 SCANNING:", window.isScanning ? 'Active' : 'Inactive');
     };
-
-    // Fix existing data function
-    window.fixExistingData = function() {
-        console.log("🔧 FIXING EXISTING FVG DATA...");
-        
-        let fixedCount = 0;
-        window.fvgData.forEach((fvg, index) => {
-            // Check if we have the fvg_type field and type is wrong
-            if (fvg.fvg_type && (fvg.type === 'fvg_data' || fvg.type !== fvg.fvg_type)) {
-                const oldType = fvg.type;
-                fvg.type = fvg.fvg_type; // Use the correct type from backend
-                console.log(`  Fixed ${fvg.pair} ${fvg.tf}: ${oldType} -> ${fvg.type}`);
-                fixedCount++;
-            }
-        });
-        
-        console.log(`✅ Fixed ${fixedCount} FVG records`);
-        
-        // Refresh the table display
-        if (window.filterAndDisplayData) {
-            window.filterAndDisplayData();
-            console.log("✅ Table refreshed with correct types");
-        }
-        
-        // Show statistics
-        const bullishCount = window.fvgData.filter(f => f.type === 'Bullish').length;
-        const bearishCount = window.fvgData.filter(f => f.type === 'Bearish').length;
-        const totalCount = window.fvgData.length;
-        
-        console.log(`📊 CORRECTED STATISTICS:`);
-        console.log(`  Total FVGs: ${totalCount}`);
-        console.log(`  Bullish: ${bullishCount}`);
-        console.log(`  Bearish: ${bearishCount}`);
-        console.log(`  With Volume: ${window.fvgData.filter(f => f.volume_strength > 0).length}`);
-        console.log(`  With Orders: ${window.fvgData.filter(f => f.unfilled_orders > 0).length}`);
-        console.log(`  Blocks: ${window.fvgData.filter(f => f.is_block_member).length}`);
-        
-        console.log("🎉 DATA CORRECTION COMPLETE!");
-    };
-
-    // Test function to add sample data
+    
     window.addSampleData = function() {
         const sampleFVG = {
-            pair: 'TESTUSDT',
-            tf: '4h',
+            id: `SAMPLE_${Date.now()}`,
+            pair: 'BTCUSDT',
+            timeframe: '4h',
             type: 'Bullish',
-            fvg_type: 'Bullish',
-            gap_low: 45000,
-            gap_high: 46000,
-            current_price: 45500,
-            distance_pct: 1.1,
-            is_touching: false,
-            tested: false,
+            gap_low: 95000,
+            gap_high: 96000,
+            gap_size: 1000,
+            distance_percentage: 0.75,
+            is_within_proximity: true,
+            is_touched: false,
             volume_strength: 25000000,
-            volume_tier: 'HIGH',
-            volume_ratio: 2.3,
             unfilled_orders: 5000000,
             unfilled_orders_formatted: '5.0M',
-            power_score: 75,
-            strength_level: 'STRONG',
-            strength_emoji: '🚀',
-            institutional_size: true,
-            institutional_marker: '🏛️',
+            power_score: 85,
+            strength: 85,
+            timestamp: new Date().toISOString(),
             is_block_member: true,
-            block_badge: '🔥 BULLISH BLOCK 4h+12h (STRONG)',
-            block_strength: 'STRONG',
-            time: Date.now(),
-            is_historical: false
+            block_badge: '🔥 BULLISH BLOCK 4h (STRONG)',
+            block_id: 'BTCUSDT_4h_001'
         };
         
-        window.fvgData.unshift(sampleFVG);
-        window.filterAndDisplayData();
-        console.log('✅ Sample data added');
+        window.fvgData.push(sampleFVG);
+        filterAndDisplayData();
+        console.log("📊 Sample FVG data added");
     };
-
-    // ========== PRODUCTION FUNCTIONS ==========
     
-    // Manual reconnection function
-    window.reconnectWebSocket = function() {
-        console.log("🔄 PRODUCTION: Manual reconnection triggered");
-        reconnectAttempts = 0;
-        reconnectDelay = 1000;
-        updateConnectionStatus('connecting');
-        connectWebSocket();
-    };
-
-    // Connection status check
     window.getConnectionStatus = function() {
         return {
-            connected: isConnected,
-            readyState: ws ? ws.readyState : -1,
-            reconnectAttempts: reconnectAttempts,
-            url: ws ? ws.url : null,
-            fvgDataCount: window.fvgData.length
+            connected: window.isConnected,
+            scanning: window.isScanning,
+            dataCount: window.fvgData.length,
+            wsState: window.ws ? window.ws.readyState : 'No WebSocket'
         };
     };
-
-    // Environment detection
-    window.getEnvironmentInfo = function() {
-        return {
-            isProduction: window.PRODUCTION_CONFIG?.isProduction || false,
-            environment: window.PRODUCTION_CONFIG?.environment || 'development',
-            websocketUrl: getWebSocketURL(),
-            host: location.hostname,
-            protocol: location.protocol
-        };
-    };
-
-    // ========== INITIALIZE APPLICATION ==========
     
-    console.log("🚀 PRODUCTION: Initializing WebSocket connection...");
-    updateConnectionStatus('connecting');
-    connectWebSocket();
-
-    // Handle page visibility changes
-    document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible' && !isConnected) {
-            console.log("👁️ PRODUCTION: Page became visible, checking connection...");
-            connectWebSocket();
-        }
-    });
-
-    // Handle online/offline events
-    window.addEventListener('online', function() {
-        console.log("🌐 PRODUCTION: Network came online, reconnecting...");
-        connectWebSocket();
-    });
-
-    window.addEventListener('offline', function() {
-        console.log("📴 PRODUCTION: Network went offline");
-        updateConnectionStatus('disconnected');
-    });
-
-    // Cleanup on page unload
-    window.addEventListener('beforeunload', function() {
-        if (ws) {
-            ws.close(1000, 'Page unloading');
-        }
-        stopHeartbeat();
-    });
-
-    console.log("✅ PRODUCTION: WebSocket client initialization complete");
-    console.log("🔧 DEBUG: Use analyzeBackendData() to inspect data format");
-    console.log("🔧 FIX: Use fixExistingData() to fix existing data");
-    console.log("🧪 TEST: Use addSampleData() to add test data");
+    // Initialize everything
+    initializeWebSocket();
+    updateScanButtons();
+    updateStatistics();
+    
+    console.log("✅ PRODUCTION: Pine Script FVG Scanner client initialization complete");
+    console.log("🔧 Available debug functions: debugFVGData(), addSampleData(), getConnectionStatus()");
 });
