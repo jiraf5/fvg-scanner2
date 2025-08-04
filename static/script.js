@@ -3,6 +3,7 @@
 // ✅ PRODUCTION: Proper WebSocket URL handling  
 // ✅ PRODUCTION: Pine Script proximity logic
 // ✅ RAILWAY: Optimized for Railway deployment
+// 🔧 FIXED: All message types (enhanced_fvg, stats, connection)
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log("🚀 PRODUCTION: FVG Scanner with Pine Script Logic initializing...");
@@ -112,7 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         switch (data.type) {
             case 'connection_established':
-                console.log("🎉 PRODUCTION: Connection established -", data.message);
+            case 'connection':  // Handle both connection types
+                console.log("🎉 PRODUCTION: Connection established -", data.message || 'Connected');
                 if (data.stats) {
                     window.stats = data.stats;
                     updateStatistics();
@@ -124,18 +126,34 @@ document.addEventListener('DOMContentLoaded', function() {
                 break;
                 
             case 'fvg_data':
-                handleFVGData(data.data);
-                if (data.stats) {
-                    window.stats = data.stats;
-                    updateStatistics();
-                }
+                // Handle direct FVG data (data is the FVG object itself)
+                handleFVGData(data);
+                break;
+                
+            case 'enhanced_fvg':
+                // Handle enhanced FVG data (data is the FVG object itself)
+                console.log("🔧 Processing enhanced FVG:", data.pair, data.timeframe, data.fvg_type);
+                handleFVGData(data);
                 break;
                 
             case 'stats_update':
+            case 'stats':  // Handle both stats types
+                console.log("📊 Updating statistics:", data);
                 if (data.stats) {
                     window.stats = data.stats;
-                    updateStatistics();
+                } else {
+                    // Stats might be at root level
+                    window.stats = {
+                        totalPairs: data.total_pairs || window.stats.totalPairs,
+                        scannedPairs: data.scanned_pairs || window.stats.scannedPairs,
+                        totalFVGs: data.total_fvgs || window.stats.totalFVGs,
+                        bullishFVGs: data.bullish_fvgs || window.stats.bullishFVGs,
+                        bearishFVGs: data.bearish_fvgs || window.stats.bearishFVGs,
+                        institutionalBlocks: data.institutional_blocks || window.stats.institutionalBlocks,
+                        touchedFVGs: data.touched_fvgs || window.stats.touchedFVGs
+                    };
                 }
+                updateStatistics();
                 break;
                 
             case 'scan_status':
@@ -162,13 +180,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function handleFVGData(data) {
         if (!data) return;
         
-        console.log("📊 Processing FVG data:", data.pair, data.tf, data.fvg_type);
+        console.log("📊 Processing FVG data:", data.pair, data.timeframe || data.tf, data.fvg_type);
         
         // Create enhanced FVG entry with Pine Script features
         const fvgEntry = {
-            id: `${data.pair}_${data.tf}_${Date.now()}_${Math.random()}`,
+            id: `${data.pair}_${data.timeframe || data.tf}_${Date.now()}_${Math.random()}`,
             pair: data.pair,
-            timeframe: data.tf,
+            timeframe: data.timeframe || data.tf,
             type: data.fvg_type,  // Use fvg_type instead of type
             gap_low: data.gap_low,
             gap_high: data.gap_high,
@@ -206,6 +224,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update display
         filterAndDisplayData();
+        
+        console.log("✅ FVG processed and added to display:", fvgEntry.pair, fvgEntry.timeframe, fvgEntry.type);
     }
     
     // Pine Script alert system
@@ -410,6 +430,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (countElement) {
             countElement.textContent = filteredData.length;
         }
+        
+        console.log(`📊 Display updated: ${filteredData.length} FVGs shown out of ${window.fvgData.length} total`);
     };
     
     // Create FVG table row
@@ -583,6 +605,11 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log("⚙️ SETTINGS:", window.pineSettings);
         console.log("🔗 CONNECTION:", window.isConnected ? 'Connected' : 'Disconnected');
         console.log("🚀 SCANNING:", window.isScanning ? 'Active' : 'Inactive');
+        console.log("📈 TOTAL FVGs RECEIVED:", window.fvgData.length);
+        
+        if (window.fvgData.length > 0) {
+            console.log("📊 LATEST FVG:", window.fvgData[window.fvgData.length - 1]);
+        }
     };
     
     window.addSampleData = function() {
@@ -618,7 +645,8 @@ document.addEventListener('DOMContentLoaded', function() {
             connected: window.isConnected,
             scanning: window.isScanning,
             dataCount: window.fvgData.length,
-            wsState: window.ws ? window.ws.readyState : 'No WebSocket'
+            wsState: window.ws ? window.ws.readyState : 'No WebSocket',
+            lastFVG: window.fvgData.length > 0 ? window.fvgData[window.fvgData.length - 1] : null
         };
     };
     
