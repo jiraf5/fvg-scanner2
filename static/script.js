@@ -373,16 +373,36 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Filter and display FVG data
     window.filterAndDisplayData = function() {
-        const table = document.getElementById('fvg-table');
-        if (!table) return;
+        // Try multiple ways to find the table
+        let table = document.getElementById('fvg-table');
         
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
+        if (!table) {
+            // Try other common IDs
+            table = document.getElementById('fvg_table') || 
+                   document.getElementById('fvgTable') || 
+                   document.querySelector('table') || 
+                   document.querySelector('.fvg-table') ||
+                   document.querySelector('[class*="table"]');
+        }
+        
+        if (!table) {
+            console.log("❌ No table found for FVG display");
+            return;
+        }
+        
+        let tbody = table.querySelector('tbody');
+        
+        if (!tbody) {
+            // Create tbody if it doesn't exist
+            tbody = document.createElement('tbody');
+            table.appendChild(tbody);
+            console.log("📋 Created new tbody for table");
+        }
         
         // Clear existing rows
         tbody.innerHTML = '';
         
-        // Get filter values
+        // Get filter values (with fallbacks)
         const typeFilter = document.getElementById('type-filter')?.value || 'all';
         const timeframeFilter = document.getElementById('timeframe-filter')?.value || 'all';
         const distanceFilter = parseFloat(document.getElementById('distance-filter')?.value || 100);
