@@ -182,33 +182,38 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log("📊 Processing FVG data:", data.pair, data.timeframe || data.tf, data.fvg_type);
         
+        // Ensure all required fields have valid values
+        const safeFVG = {
+            pair: data.pair || 'UNKNOWN',
+            timeframe: data.timeframe || data.tf || '1h',
+            type: data.fvg_type || data.type || 'Unknown',
+            gap_low: Number(data.gap_low) || 0,
+            gap_high: Number(data.gap_high) || 0,
+            gap_size: Number(data.gap_size) || 0,
+            distance_percentage: Number(data.distance_percentage) || 0,
+            is_within_proximity: Boolean(data.is_within_proximity),
+            is_touched: Boolean(data.is_touched),
+            volume_strength: Number(data.volume_strength) || 0,
+            unfilled_orders: Number(data.unfilled_orders) || 0,
+            unfilled_orders_formatted: data.unfilled_orders_formatted || formatOrders(Number(data.unfilled_orders) || 0),
+            power_score: Number(data.power_score) || 0,
+            strength: Number(data.strength) || 0,
+            timestamp: data.timestamp || new Date().toISOString(),
+            is_block_member: Boolean(data.is_block_member),
+            block_badge: data.block_badge || '',
+            block_id: data.block_id || null
+        };
+        
         // Create enhanced FVG entry with Pine Script features
         const fvgEntry = {
-            id: `${data.pair}_${data.timeframe || data.tf}_${Date.now()}_${Math.random()}`,
-            pair: data.pair,
-            timeframe: data.timeframe || data.tf,
-            type: data.fvg_type,  // Use fvg_type instead of type
-            gap_low: data.gap_low,
-            gap_high: data.gap_high,
-            gap_size: data.gap_size,
-            distance_percentage: data.distance_percentage || 0,
-            is_within_proximity: data.is_within_proximity || false,
-            is_touched: data.is_touched || false,
-            volume_strength: data.volume_strength || 0,
-            unfilled_orders: data.unfilled_orders || 0,
-            unfilled_orders_formatted: data.unfilled_orders_formatted || formatOrders(data.unfilled_orders || 0),
-            power_score: data.power_score || 0,
-            strength: data.strength || 0,
-            timestamp: data.timestamp || new Date().toISOString(),
-            is_block_member: data.is_block_member || false,
-            block_badge: data.block_badge || '',
-            block_id: data.block_id || null,
+            id: `${safeFVG.pair}_${safeFVG.timeframe}_${Date.now()}_${Math.random()}`,
+            ...safeFVG,
             
             // Pine Script specific fields
-            pine_distance: data.distance_percentage,
-            pine_proximity: data.is_within_proximity,
-            pine_touched: data.is_touched,
-            pine_strength: data.strength
+            pine_distance: safeFVG.distance_percentage,
+            pine_proximity: safeFVG.is_within_proximity,
+            pine_touched: safeFVG.is_touched,
+            pine_strength: safeFVG.strength
         };
         
         // Add to global data array
@@ -508,40 +513,63 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Utility functions
     function formatPrice(price) {
-        if (price >= 1) {
-            return price.toFixed(4);
+        // Handle undefined, null, or invalid price values
+        if (price === undefined || price === null || isNaN(price)) {
+            return "0.0000";
+        }
+        
+        const numPrice = Number(price);
+        if (numPrice >= 1) {
+            return numPrice.toFixed(4);
         } else {
-            return price.toFixed(8);
+            return numPrice.toFixed(8);
         }
     }
     
     function formatVolume(volume) {
-        if (volume >= 1_000_000_000) {
-            return `${(volume / 1_000_000_000).toFixed(1)}B`;
-        } else if (volume >= 1_000_000) {
-            return `${(volume / 1_000_000).toFixed(1)}M`;
-        } else if (volume >= 1_000) {
-            return `${(volume / 1_000).toFixed(1)}K`;
+        // Handle undefined, null, or invalid volume values
+        if (volume === undefined || volume === null || isNaN(volume)) {
+            return "0";
+        }
+        
+        const numVolume = Number(volume);
+        if (numVolume >= 1_000_000_000) {
+            return `${(numVolume / 1_000_000_000).toFixed(1)}B`;
+        } else if (numVolume >= 1_000_000) {
+            return `${(numVolume / 1_000_000).toFixed(1)}M`;
+        } else if (numVolume >= 1_000) {
+            return `${(numVolume / 1_000).toFixed(1)}K`;
         } else {
-            return volume.toString();
+            return Math.floor(numVolume).toString();
         }
     }
     
     function formatOrders(orders) {
-        if (orders >= 1_000_000) {
-            return `${(orders / 1_000_000).toFixed(1)}M`;
-        } else if (orders >= 1_000) {
-            return `${(orders / 1_000).toFixed(1)}K`;
+        // Handle undefined, null, or invalid order values
+        if (orders === undefined || orders === null || isNaN(orders)) {
+            return "0";
+        }
+        
+        const numOrders = Number(orders);
+        if (numOrders >= 1_000_000) {
+            return `${(numOrders / 1_000_000).toFixed(1)}M`;
+        } else if (numOrders >= 1_000) {
+            return `${(numOrders / 1_000).toFixed(1)}K`;
         } else {
-            return orders.toString();
+            return Math.floor(numOrders).toString();
         }
     }
     
     function getDistanceClass(distance) {
-        if (distance <= 0.5) return 'very-close';
-        if (distance <= 1.0) return 'close';
-        if (distance <= 2.0) return 'medium';
-        if (distance <= 5.0) return 'far';
+        if (distance === undefined || distance === null || isNaN(distance)) {
+            return 'unknown';
+        }
+        
+        const numDistance = Number(distance);
+        if (numDistance <= 0.5) return 'very-close';
+        if (numDistance <= 1.0) return 'close';
+        if (numDistance <= 2.0) return 'medium';
+        if (numDistance <= 5.0) return 'far';
         return 'very-far';
     }
     
